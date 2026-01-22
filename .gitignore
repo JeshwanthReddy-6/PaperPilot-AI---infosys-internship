@@ -1,0 +1,9 @@
+# Ignore API keys
+secrects.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments (if any)
+env/

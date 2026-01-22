@@ -1,0 +1,61 @@
+building upon this observation, we introduce the concept of
+neighboring pixel relationships(npr) as a means to cap-
+ture and characterize the generalized structural artifacts
+stemming from up-sampling operations.
+this
+analysis culminates in the establishment of a novel state-of-
+the-art performance, showcasing a remarkable 11.6% im-
+provement over existing methods.
+building upon these insights, we propose a simple but
+effective artifact representation, termed neighboring pixel
+relationships (npr), aimed at achieving generalized deep-
+fake detection.
+the primary innovation of
+our approach lies in introducing a simple yet versatile arti-
+fact representation derived from the common up-sampling
+component of generation pipelines.
+our paper makes the following contributions:
+• we propose a simple yet effective artifact representa-
+tion, neighboring pixel relationships (npr), designed
+to capture local up-sampling artifacts from image pix-
+els, thereby achieving generalized forgery image detec-
+tion.
+• we demonstrate that up-sampling operators can cause
+generalized forgery artifacts beyond frequency-based ar-
+tifacts.
+related work
+in this section, we present a concise survey of deepfake
+detection approaches, categorizing them into two main
+groups: image-based and frequency-based detection.
+we introduce a form of local up-sampling artifacts,
+named neighboring pixel relationships (npr), the details
+of which are presented in this section.
+gan pipelines: we present an overview of the fundamen-
+tal pipeline inherent to generative adversarial networks
+(gans), as depicted in figure 3 (a).
+consequently, the correlation of elements is presented
+in vc
+ˆx.
+implementation details: we design a lightweights cnn
+network using convolutional layer and resnet[16] block as
+the classifiers for npr with 1.44 million parameters.
+our method
+is implemented using the pytorch on nvidia geforce
+rtx 3090 gpu.
+generalization capability evaluation
+in this section, we demonstrate that the local artifacts repre-
+sentation, neighboring pixel relationships, induced by the
+up-sampling operations in common generation pipelines,
+can be easily employed for identifying generated image
+data.
+the neighboring pixel relationships (npr) outperforms its
+counterparts, showcasing higher mean accuracy (acc.) and
+comparable mean average precision (a.p.) metrics.
+the detection performance on diffusionforensics [58]
+is presented in table 3.
+npr outperforms the current state-of-the-art meth-
+ods lgrad and ojha [44] by 7.1% and 20.9%, respectively,
+in terms of mean acc.
+we present a simple but effective artifact rep-
+resentation, named neighboring pixel relationships (npr),
+to achieve generalized deepfake detection.
