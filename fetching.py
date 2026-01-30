@@ -1,11 +1,11 @@
 import requests
 import time
 import os
-
+from secrects import SEMANTIC_SCHOLAR_API_KEY
 def fetch_papers(topic, limit=4, retries=1, wait_seconds=5):
     url = "https://api.semanticscholar.org/graph/v1/paper/search"
     headers={
-        "x-api-key" : "WALL-E :)"
+        "x-api-key" : SEMANTIC_SCHOLAR_API_KEY
     }
 
     params = {

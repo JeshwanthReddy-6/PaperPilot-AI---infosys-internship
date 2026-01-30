@@ -1,12 +1,30 @@
 from fetching import fetch_papers
 from download import download_pdf
 from extracting import extract_text_from_pdf
+import os
+import json
 
 def run_pipeline(topic):
     papers = fetch_papers(topic)
 
+    #Create metadata folder
+    os.makedirs("data/metadata", exist_ok=True)
+
     for paper in papers:
         paper_id = paper.get("paperId")
+
+        #SAVE METADATA (once per paper)
+        metadata = {
+            "paperId": paper_id,
+            "title": paper.get("title"),
+            "authors": [a["name"] for a in paper.get("authors", [])],
+            "year": paper.get("year"),
+            "paper_url": paper.get("url")
+        }
+
+        with open(f"data/metadata/{paper_id}.json", "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+
         pdf_url = paper.get("openAccessPdf", {}).get("url")
 
         if not pdf_url:
@@ -20,4 +38,4 @@ def run_pipeline(topic):
         extract_text_from_pdf(pdf_path, paper_id)
 
 if __name__ == "__main__":
-    run_pipeline("Economics & education")
+    run_pipeline("deepfake")
