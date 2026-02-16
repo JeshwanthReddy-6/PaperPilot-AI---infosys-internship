@@ -27,8 +27,7 @@ def load_documents():
 def compute_similarity():
     documents, doc_names = load_documents()
     if len(documents) < 2:
-        print("Not enough documents for comparison.")
-        return
+        return "Not enough documents for comparison."
 
     vectorizer = TfidfVectorizer(
         stop_words="english"
@@ -38,12 +37,13 @@ def compute_similarity():
 
     similarity_matrix = cosine_similarity(tfidf_matrix)
 
-    print("\n--- Cosine Similarity Matrix ---\n")
+    result = "Cosine Similarity Matrix:\n\n"
     for i in range(len(doc_names)):
         for j in range(i + 1, len(doc_names)):
-            print(
+            result += (
                 f"{doc_names[i]}  vs  {doc_names[j]}  →  "
-                f"{similarity_matrix[i][j]:.3f}"
+                f"{similarity_matrix[i][j]:.3f}\n"
             )
 
-compute_similarity()
+    return result
+

@@ -1,0 +1,1329 @@
+Automatic speaker veriﬁcation spooﬁng and deepfake detection
+using wav2vec 2.0 and data augmentation
+Hemlata Tak1, Massimiliano Todisco1, Xin Wang2, Jee-weon Jung3
+Junichi Yamagishi2 and Nicholas Evans1
+1EURECOM, France, 2 National Institute of Informatics, Japan
+3Naver Corporation, South Korea
+{tak,todisco,evans}@eurecom.fr, {wangxin,jyamagis}@nii.ac.jp, jeeweon.jung@navercorp.com
+Abstract
+The performance of spooﬁng countermeasure systems de-
+pends fundamentally upon the use of sufﬁciently representa-
+tive training data. With this usually being limited, current so-
+lutions typically lack generalisation to attacks encountered in
+the wild. Strategies to improve reliability in the face of uncon-
+trolled, unpredictable attacks are hence needed. We report in
+this paper our efforts to use self-supervised learning in the form
+of a wav2vec 2.0 front-end with ﬁne tuning. Despite initial base
+representations being learned using only bona ﬁde data and no
+spoofed data, we obtain the lowest equal error rates reported in
+the literature for both the ASVspoof 2021 Logical Access and
+Deepfake databases. When combined with data augmentation,
+these results correspond to an improvement of almost 90% rel-
+ative to our baseline system.
+Keywords: anti-spooﬁng, presentation attack detection,
+automatic speaker veriﬁcation,
+Deepfake detection,
+self-
+supervised learning, wav2vec 2.0
+1. Introduction
+A persisting challenge in the design of spooﬁng countermea-
+sures (CMs) for automatic speaker veriﬁcation (ASV) is relia-
+bility in the face of diverse, unpredictable attacks [1]. ASV sys-
+tems can be compromised by attacks belonging to a broad vari-
+ety of different classes, e.g., converted voice, synthetic speech
+and replayed recordings. Even within each attack class, there
+is considerable potential variation, e.g., different algorithms or
+recording and replay device characteristics. An ideal spooﬁng
+detection solution should be robust to all such variation even if,
+in the wild, it is unpredictable. The acquisition of training data
+that is representative of spooﬁng attacks with near-boundless
+variability is obviously impracticable.
+The ASVspoof initiative and challenge series have col-
+lected large databases of spoofed and bona ﬁde utterances that
+are suitable for the training of spooﬁng countermeasures. To
+promote the development of generalisable countermeasures,
+namely detection solutions that cope well in the face of spoof-
+ing attacks not previously encountered, assessment is performed
+with experimental protocols and evaluation data that comprise
+spoofed utterances generated with a broad variety of different
+algorithms or techniques.
+The differences between training,
+development and evaluation data can lead to substantial differ-
+ences in detection performance. For the most recent ASVspoof
+The ﬁrst author is supported by the VoicePersonae project funded
+by the French Agence Nationale de la Recherche (ANR) and the Japan
+Science and Technology Agency (JST).
+2021 Logical Access (LA) evaluation [2], the equal error rate
+(EER) of the best performing baseline solution increased from
+0.55% for the development set to 9.26% for the evaluation
+set [2]. Submission results show better performance [3–9], but
+the fundamental gap between performance for development and
+evaluation data remains, indicating a persisting lack of general-
+isation.
+Given that the training data used for ASVspoof challenges
+comprises spoofed utterances generated with a modest number
+of different attack algorithms (six in the case of the ASVspoof
+2019 LA database), the lack of generalisation may be difﬁcult to
+improve upon unless challenge rules are relaxed to allow train-
+ing using external data. A relaxed training data policy would
+complicate comparisons between different systems and tech-
+nology trained using different data – the playing ﬁeld would
+no longer be level – though potential improvements to general-
+isation may make it worthwhile.
+The question then is what external training data to use and
+how to use it? With the drive toward reproducible research,
+a number of speech synthesis and voice conversion algorithms
+are now openly available as open source. Additional training
+data, generated with different attack algorithms, can hence be
+produced readily. The number of algorithms remains limited,
+however, and can fundamentally never be fully representative
+of what can reasonably be expected in the wild. We have hence
+explored a different approach.
+Motivated by (i) its proven application to the learning of
+general neural representations for a range of different tasks [11–
+19], (ii) evidence that ﬁne-tuning with modest quantities of la-
+belled data leads to state-of-the-art results, (iii) encouraging,
+previously reported results for anti-spooﬁng [20,21] and (iv) the
+appeal of one-class classiﬁcation approaches [22], we have ex-
+plored the use of self-supervised learning to improve generali-
+sation. Our hypothesis is that better representations trained on
+diverse speech data, even those learned for other tasks and ini-
+tially using only bona ﬁde data (hence one-class), may help to
+reduce over-ﬁtting and hence improve reliability and domain-
+robustness, particularly in the face of previously unseen spoof-
+ing attacks. Additionally, we hope that better trained repre-
+sentations are complementary to data augmentations techniques
+which are already known to improve generalisation [7,23–27].
+The principal contributions of this work are: (i) improved
+generalisation and domain robustness using a pre-trained, self-
+supervised speech model with ﬁne-tuning; (ii) additional im-
+provements using data augmentation showing complementary
+beneﬁts to self-supervised learning; (iii) a new self-attention
+based aggregation layer which brings complementary improve-
+ments.
+arXiv:2202.12233v2  [eess.AS]  28 Feb 2022
+bona-fide
+spoofed
+𝓖𝑠𝑡
+Graph 
+module
+Graph 
+module
+𝓖𝒔
+𝓖𝑡
+ℎ𝑒𝑡𝑒𝑟𝑜𝐴𝑇𝑇
+ℎ𝑒𝑡𝑒𝑟𝑜𝐴𝑇𝑇
+element −wise
+maximum
+max graph operation (MGO)
+stack
+node
+stack
+node
+HS-GAL
+graph
+combine
+stack
+node
+HS-GAL
+ℎ𝑒𝑡𝑒𝑟𝑜𝐴𝑇𝑇
+stack
+node
+ℎ𝑒𝑡𝑒𝑟𝑜𝐴𝑇𝑇
+stack
+node
+HS-GAL
+HS-GAL
+readout
+node −wise
+maximum & average
+concatenate
+𝐟
+𝐭
+spectral feature
+representation
+temporal feature
+representation
+𝓖𝑆𝑻
+Figure 1: AASIST baseline framework reproduced from [10].
+RawNet2  encoder
+𝑺
+Sinc-layer  & 
+post-processing
+f = maxT(abs(𝑺))
+t = maxF(abs(𝑺))
+𝑺
+wav2vec 2.0  model  &
+post-processing
+f = weighted sumT(𝑺)
+t = weighted sumF(𝑺)
+RawNet2  encoder
+(a)
+Self-attention based
+aggregation layer
+(b)
+Figure 2: Front-end systems: (a) the baseline sinc-layer front-
+end; (b) the wav2vec 2.0 front-end.
+2. Related work
+Self-supervised learning (SSL) has attracted considerable atten-
+tion in recent times. Existing works show that pre-trained mod-
+els derived using SSL generalise well across a multitude of dif-
+ferent tasks when a relatively simple classiﬁer is learned from
+the resulting representations using only a modest quantity of la-
+belled data [28]. A growing number of self-supervised speech
+models have been proposed. Examples include contrastive pre-
+dictive coding (CPC) [16, 29], auto-regressive predictive cod-
+ing [30], wav2vec [31], HuBERT [32,33], wav2vec 2.0 [12,34]
+and Wavlm [35], with all showing promising results for a vari-
+ety of different speech processing tasks.
+Two
+particularly
+popular
+approaches,
+HuBERT
+and
+wav2vec 2.0, have been applied to automatic speech recog-
+nition [12, 13], mispronunciation detection [36, 37], speaker
+recognition [38, 39] and emotion recognition [40]. The same
+techniques have been explored in the context of spooﬁng detec-
+tion [20, 21]. Xie et al. [20] showed the beneﬁt of using SSL
+with a Siamese network for spooﬁng detection. With learned
+representations coming from their combination, and without
+comparative assessments using representations derived via al-
+ternative means, the speciﬁc beneﬁts of SSL are difﬁcult to
+judge.
+Wang et al. [21] compared different SSL based front-ends
+and back-end architectures and showed the importance of ﬁne-
+tuning SSL models for spooﬁng detection.
+By replacing a
+linear frequency cepstral coefﬁcient front-end with a wav2vec
+2.0 front-end and by ﬁne-tuning, they achieved relative reduc-
+tions in the equal error rate (EER) of 68% and 79% for the
+ASVspoof 2021 LA and DF databases respectively. Nonethe-
+less, the EERs remain at 5% and the additional or complemen-
+tary beneﬁt of data augmentation, which is known to be beneﬁ-
+cial in both cases [3,4,7], was not explored. Results showed that
+the wav2vec 2.0 [12] front-end gives better generalised spooﬁng
+detection performance than a HuBERT model.
+We have hence explored the wav2vec 2.0 XLS-R (0.3B)
+model1 [13] in our work. wav2vec 2.0 XLS-R is a large-scale
+cross-lingually pre-trained model trained on diverse corpora in-
+cluding VoxPopuli data (VP-400K) [41], the multilingual Lib-
+rispeech corpus (MLS) [42], CommonVoice (CV) [43], VoxLin-
+gua107 (VL) [44], and BABEL (BBL) [45] datasets. Together,
+they include speech data in 128 different languages from many
+different regions of the world. We explored the wav2vec 2.0
+front-end with an integrated spectro-temporal graph attention
+network (AASIST) as a back-end [10]. The latter is described
+in the next section. Its coupling with a wav2vec 2.0 front-end is
+described in Section 4.
+3. AASIST baseline system
+The baseline system is an end-to-end, integrated spectro-
+temporal graph attention network named AASIST [10], illus-
+trated in Fig. 1. It extracts representations directly from raw
+waveform inputs. As illustrated in Fig. 2-(a), AASIST uses a
+sinc convolutional layer based front-end [46]. It is initialised
+with 70 mel-scaled ﬁlters, each with a kernel size of 129 [47].
+Through the addition of a channel dimension, the sinc layer
+output is fed to a post-processing layer and transformed to a
+spectro-temporal representation. These are fed to a RawNet2-
+based residual encoder, to learn a higher-level feature map
+S ∈RC×F ×T where C, F and T refer to the number of chan-
+nels, spectral bins and time frames respectively.
+Separate spectral and temporal representations are learned
+from S using a max-pooling operation which is applied to the
+absolute values across either temporal or spectral dimensions in
+order to construct either a spectral input graph (Gs ∈RNs×ds)
+or a temporal input graph (Gt ∈RNt×dt). Ns and Nt are the
+set of graph nodes in spectral and temporal graphs respectively
+whereas d is the feature dimensionality of each node. Spec-
+1https://github.com/pytorch/fairseq/tree/
+main/examples/wav2vec/xlsr
+                 Masked  Transformer 
+CNN features 
+x1:L
+q1: N
+Latent speech representation
+c1: N
+q
+q
+q
+q
+contrastive 
+loss
+wav2vec 2.0 
+encoder
+                    Transformer  
+Latent speech representation 
+x1:L
+(z1: N)
+o1:N
+Fully connected layer (FC)
+Pre-training
+Fine-tuning
+(z1: N)
+CNN features 
+Quantized 
+representation
+Context 
+representation
+Figure 3: An overview of the pre-training and ﬁne-tuning of the wav2vec 2.0 model, adapted from [13].
+tral and temporal graphs Gs and Gt are modelled using a pair
+of parallel graph modules (grey boxes in Fig. 1), each compris-
+ing a graph attention network (GAT) [48] and a graph-pooling
+layer [49]:
+Gt = graph module(maxF (abs(S)))
+(1)
+Gs = graph module(maxT (abs(S)))
+(2)
+A heterogeneous spectro-temporal graph (Gst) is then
+formed by combining temporal (Gt) and spectral (Gs) graphs
+using a heterogeneous stacking graph attention layer (HS-
+GAL). Graph combination enables the concurrent modelling
+of heterogeneous graph representations with different node
+dimensions.
+An HS-GAL contains an attention mechanism
+modiﬁed in order to accommodate graph heterogeneity [50]
+and an additional stack node [28]. The latter acts to capture
+the relationships between artefacts spanning temporal and
+spectral domains.
+First, Gt and Gs are projected using an
+afﬁne-transformation to another latent space with common
+dimensionality dst before being fed into the HS-GAL which
+then constructs a combined heterogeneous graph Gst.
+HS-GALs are applied with a max graph operation (MGO)
+where two branches, each consisting of two HS-GALs, learn to
+detect different spooﬁng artefacts in parallel. Each HS-GAL is
+followed by a graph pooling layer and an element-wise maxi-
+mum operation is applied to the branch outputs to produce an-
+other heterogeneous graph GST . HS-GALs in each branch share
+a common stack node. The stack node of each preceding HS-
+GAL is fed to the following HS-GAL so that information in
+both temporal and spectral graphs is preserved.
+The readout scheme (penultimate block in Fig. 1) uses
+node-wise maximum and average operations. The output of the
+readout layer is formed from the concatenation of ﬁve nodes.
+The ﬁrst four nodes are derived by applying a maximum and
+average to spectral nodes (orange) and temporal nodes (blue) in
+GST . The ﬁfth is the copied stack node. A two-class predic-
+tion output (bona ﬁde and spoofed) is ﬁnally generated using a
+hidden fully connected layer.
+4. Self-supervised front-end
+In this section we describe the replacement of the sinc-layer
+front-end with a wav2vec 2.0 model as illustrated in Fig. 2-(b).
+We describe both pre-training and ﬁne-tuning to support down-
+stream spooﬁng detection, both illustrated in Fig. 3.
+4.1. Wav2vec 2.0 model
+The wav2vec 2.0 pre-trained model is used to extract a sequence
+of feature representations o1:N from the raw input waveform
+x1:L, where L is the number of samples. As shown in Fig. 3, the
+wav2vec 2.0 model consists of a convolutional neural network
+(CNN) and a transformer [28, 51] network. The former con-
+verts the input x1:L to a hidden feature sequence z1:N whereas
+the latter transforms z1:N to output sequence o1:N. The ratio
+between L and N is dictated by the CNN stride of 20 ms (the
+default setting).
+4.2. Pre-training
+An illustration of the pre-training procedure following [12] is
+illustrated to the left in Fig. 3. Latent representations z1:N are
+quantised to representations q1:N. Some portion of the latent
+representation z1:N is then masked and fed to the transformer
+which builds new context representations c1:N. A contrastive
+loss for each masked time step n is then computed to measure
+how well the target qn can be identiﬁed from among a set of
+distractors (i.e., qn′ sampled from the other masked time steps
+where n′ ̸= n) given the corresponding context vector cn. All
+work reported in this paper was performed with the wav2vec
+2.0 XLS-R (0.3B) model [13]. We followed the example in
+the Fairseq project toolkit [52] to extract feature representations
+from self-supervised wav2vec 2.0 pre-trained model.2
+4.3. Fine-tuning
+Since pre-training is performed with only bona ﬁde data (with
+no spoofed data), as per [21], spooﬁng detection performance
+is expected to improve with ﬁne tuning using in-domain bona
+ﬁde and spoofed training data. Our hypothesis is that ﬁne tun-
+2https://github.com/pytorch/fairseq/tree/
+main/examples/wav2vec
+ing will protect against over-ﬁtting and hence promote better
+generalisation. For all experiments reported in this paper, in-
+cluding those related to the ASVspoof 2021 LA dataset and the
+ASVspoof 2021 DF dataset, ﬁne-tuning is performed using the
+ASVspoof 2019 LA training partition only. Whereas the 2021
+LA data contains codec and transmission variation and the 2021
+DF data contains compression variation, the 2019 LA data used
+for ﬁne-tuning contains neither. During ﬁne-tuning, the pre-
+trained wav2vec 2.0 XLS-R model is optimsied jointly with the
+AASIST CM via back-propagation using the ASVspoof 2019
+LA training set. This process is described in section 6.3 whereas
+the ﬁne-tuning procedure is illustrated to the right in Fig. 3. It
+is performed using a weighted cross entropy objective function
+to minimize the training loss. In contrast to pre-training, in-
+put masking is not applied to hidden features z1:N during ﬁne-
+tuning. Additionally, we add a fully connected layer on top of
+the wav2vec 2.0 transformer encoder output o1:N in order to
+reduce the representation dimension (top-right of Fig. 3).
+4.4. Use with AASIST CM
+The sinc layer shown in Fig. 2-(a) is replaced with the wav2vec
+2.0 front-end shown in Fig. 2-(b). As before, the output o1:N is
+fed to a RawNet2-based residual encoder which is used to learn
+higher-level feature representations S ∈RC×F ×T . Whereas
+the baseline system extracts temporal and spectral representa-
+tions t and f from S using a max-pooling operation, a self-
+attentive aggregation layer (described in Section 5) was found
+to improve performance of both front-ends. As shown in Fig. 1,
+temporal and spectral representations are then fed to the AA-
+SIST CM model to obtain a two-class prediction (bona ﬁde and
+spoofed) in the same manner as described in Section 3. A sum-
+mary of the wav2vec 2.0 front-end and downstream AASIST
+model conﬁgurations is presented in Table 1.
+5. Self-attention based aggregation layer
+Attention based pooling layers such as self-attentive pooling
+(SAP) and attentive statistical pooling (ASP) [53] has shown to
+be beneﬁcial to the aggregation of frame-level features and the
+extraction of embeddings [54–58] for speaker recognition and
+veriﬁcation tasks. We have also found that the introduction of a
+2D self-attention based aggregation layer between the front-end
+and back-end helps to improve spooﬁng detection performance.
+The new self-attentive aggregation layer is used to extract
+more attentive/relevant spectral and temporal representations. It
+helps to aggregate and assign higher attention weights through
+weighted summation to the most discriminative temporal and
+spectral features. We generate 2-D attention maps (an attention
+weight matrix) using a 2-D convolutional (conv2d) layer with
+one kernel-size rather than conventional conv1d based attention
+applied to a single domain. Weights are derived from represen-
+tations S processed by a conv2d layer followed by an activation
+& batch normalization (BN) layer, a 2-D convolutional layer
+and a softmax function to normalized the weights:
+W = Softmax(conv2d(BN(SeLU(conv2d(S))))),
+(3)
+where conv2d(·) denotes the 2-D convolution operation with
+an scaled exponential linear unit SeLU(·) as the activation
+function [59], and BN is batch normalisation [60]. Temporal
+and spectral representations are then extracted from the self-
+attentive aggregation layer according to:
+t =
+X
+F
+S ⊙W,
+(4)
+Table 1: The wav2vec 2.0 and AASIST model architecture and
+conﬁguration. Dimensions refer to (channels, frequency, time).
+Batch normalisation (BN) and scaled exponential linear unit
+(SeLU), beneath the dotted line, are applied to residual block
+outputs.
+Layer
+Input:64600 samples
+Output shape
+Data-aug
+RawBoost
+(64600)
+SSL
+wav2vec 2.0
+(201,1024) (T,F)
+front-end
+FC (ﬁne-tuning)
+(201,128)
+transpose
+o=(128,201) (F,T)
+Post-
+add channel
+(1,128,201)
+processing
+Maxpool-2D(3)
+(1,42,67)
+BN & SeLU
+Res-block
+2×
+
+
+
+
+
+Conv-2D((2,3),1,32)
+BN & SeLU
+Conv-2D((2,3),1,32)
+
+
+
+
+
+(32,42,67)
+Res-block
+4×
+
+
+
+
+
+Conv-2D((2,3),1,64)
+BN & SeLU
+Conv-2D((2,3),1,64)
+
+
+
+
+
+(64,42,67)
+BN & SeLU
+Spectral-attention
+Temporal-attention
+self att. agg. layer (f)=(64, 42)
+self att. agg. layer (t)=(64, 67)
+Gs = (21(Ns), 64(ds))
+Gt = (33(Nt), 64(dt))
+hetero. graph (Gst)
+HS-GAL
+(54(Nst),64(dst))
+HS-GAL→HS-GAL,
+HS-GAL→HS-GAL,
+stack node
+stack node
+(32,26), (32,)
+(32,26),(32,)
+MGO (GST )
+element-wise max.
+(32,26), (32,)
+readout
+node-wise max. and avg.
+(160,)
+& concatenation
+Output
+FC(2)
+2
+f =
+X
+T
+S ⊙W,
+(5)
+where ⊙denotes element-wise multiplication. W ∈RF ×T is
+the 2-D attention normalised learnable weight matrix used in the
+self-attentive aggregation layer to calculate the weighted sum of
+the representation S across time and frequency.
+6. Experimental setup
+Described in the following are the databases and metrics used
+in all reported experimental work, our use of data augmentation
+and speciﬁc, reproducible implementation details.
+6.1. Databases and metrics
+We used the training and development partitions of the
+ASVspoof 2019 LA database [61, 62] for training and valida-
+tion. Evaluation was performed using the ASVspoof 2021 LA
+and domain mis-matched DF databases [2]. While both are gen-
+erated from the same VCTK source database3, the LA database
+3http://dx.doi.org/10.7488/ds/1994
+contains codec and transmission variability whereas the DF
+database contains compression variability in addition to data
+stemming from sources other than the VCTK database [63].
+The 2019 data used for training and validation contains nei-
+ther.
+We use two evaluation metrics: the Equal Error Rate
+(EER) [64] and the Minimum Tandem Detection Cost Function
+(min t-DCF) [65]. We focus on the ﬁrst for ease of interpre-
+tation and include the second since it is the default metric for
+ASVspoof challenges.
+6.2. Data augmentation
+Data augmentation (DA) is already known to reduce overﬁtting
+and hence to improve generalisation [3, 4, 6, 7, 27] and is par-
+ticularly effective in the case of LA scenarios in which there is
+substantial variability stemming from, e.g., encoding, transmis-
+sion and acquisition devices [2]. We are interested to determine
+whether self-supervised learning is complementary to DA. Un-
+like traditional DA techniques which enlarge the training dataset
+using additional, artiﬁcially generated utterances, and using the
+RawBoost4 DA tool [27], we add nuisance variability on-the-
+ﬂy to the existing training data. RawBoost adds variation in
+the form of: i) linear and non-linear convolutive noise; ii) im-
+pulsive signal-dependent additive noise; iii) stationary signal-
+independent additive noise. Full details are available in [27].
+DA is applied using exactly the same conﬁguration and
+parameters reported in the original work [27]. It shows that
+a combination of linear and non-linear convolutive noise and
+impulsive signal-dependent additive noise strategies work best
+for the LA database. These augmentation strategies suit the
+convolutive and device related noise sources that characterise
+telephony applications. In contrast, for the DF database, DA
+works best using stationary signal-independent additive, ran-
+domly coloured noise, which match better the effects of com-
+pression [66] applied in generating the DF database. DA exper-
+iments and conﬁguration are discussed further in Section 7.3.
+6.3. Implementation details
+Audio data are cropped or concatenated giving segments of ap-
+proximately 4 seconds duration (64,600 samples). Graph pool-
+ing is applied with an empirically chosen pooling ratio of k
+= 0.5 for spectral and temporal graphs. We used the standard
+Adam optimiser [67] with a ﬁxed learning rate of 0.0001 for ex-
+periments without the wav2vec 2.0 front-end. Since ﬁne-tuning
+demands high GPU computation, experiments with wav2vec
+2.0 were performed with a smaller batch size of 14 and a lower
+learning rate of 10−6 to avoid model over-ﬁtting.
+As illus-
+trated to right in Fig. 3, the fully connected layer after the
+wav2vec 2.0 SSL front end used 128 output dimensions. All
+other hyperparameters are the same for both front-ends which
+are both jointly optimised with the back-end classiﬁer using
+back-propagation [68]. As is now common in the related liter-
+ature [69, 70], we performed each experiments with three runs
+using different random seeds to initialize the network weights
+and report the results of the best performing seed and average
+results. All models were trained for 100 epochs on a single
+GeForce RTX 3090 GPU and all results are reproducible using
+open source code5 and with the same random seed and GPU
+environment.
+4https://github.com/TakHemlata/
+RawBoost-antispoofing
+5URL for code to be made available upon publication.
+Table 2: Pooled EER and pooled min t-DCF results for the
+ASVspoof 2021 LA database evaluation set, for the sinc-layer
+and wav2vec 2.0 front-ends. SA refers to the self-attentive ag-
+gregation layer whereas DA refers to data augmentation. Re-
+sults are the best (average) obtained from three runs of each
+experiment with different random seeds.
+front-end
+SA
+DA
+Pooled EER
+Pooled min t-DCF
+sinc-layer
+×
+×
+11.47 (11.95)
+0.5081 (0.5139)
+wav2vec 2.0
+×
+×
+6.15 (6.46)
+0.3577 (0.3587)
+sinc-layer
+✓
+×
+8.73 (11.61)
+0.4285 (0.5203)
+wav2vec 2.0
+✓
+×
+4.48 (6.15)
+0.3094 (0.3482)
+sinc-layer
+✓
+✓
+7.65 (7.87)
+0.3894 (0.3960)
+wav2vec 2.0
+✓
+✓
+0.82 (1.00)
+0.2066 (0.2120)
+7. Results
+We present ﬁve sets of experiments. The ﬁrst is a comparison of
+each front-end in terms of performance for the ASVspoof 2021
+LA database. The second and third assess the complementary
+beneﬁts coming from the new self-attention based aggregation
+layer and data augmentation. The fourth is an assessment per-
+formed on the ASVspoof 2021 DF database whereas the last is
+an assessment using a simpliﬁed CM solution.
+7.1. Front-end comparison
+Results for the AASIST baseline with the sinc-layer front-end
+(Section 3) and the same system with the wav2vec 2.0 front-end
+(Section 4) are presented in the ﬁrst two rows of Table 2. These
+systems use neither the self-attentive aggregation layer nor data
+augmentation. The baseline EER of 11.47% is high and shows
+that the system is not robust to the codec and transmission vari-
+ability which characterises the ASVspoof 2021 LA dataset. The
+same system using the wav2vec 2.0 front-end delivers an EER
+of 6.15%. While the relative reduction is almost 46%, the EER
+is still unacceptably high.
+7.2. Self-attentive aggregation layer
+Results for the same two front-end variants but using the self-
+attentive aggregation layer (SA) introduced in Section 5 are pre-
+sented in rows 3 and 4 of Table 2. In both cases the EER drops
+substantially, to 8.73% for the sinc-layer front-end and to 4.48%
+for the wav2vec 2.0 frontend. In this case the wav2vec 2.0 fron-
+tend is responsible for a relative improvement of almost 50%.
+7.3. Data augmentation
+Results for the same two systems, both with the self-attentive
+aggregation layer (SA), and now also with data augmentation
+(DA), are shown in rows 5 and 6 of Table 2. DA reduces the
+EER only marginally from 8.73% to 7.65% in case of the sinc-
+layer front-end. To verify that this improvement is not due to
+random factors in neural network training (e.g., different, ran-
+dom initial network weights), we conducted a statistical analy-
+sis of the results following [69]. The results6 suggest that the
+improvement is statistically signiﬁcant and is hence unlikely
+to be caused by factors other than DA. Its effect is more pro-
+nounced when using the wav2vec 2.0 front-end for which the
+EER decreases from 4.48% to 0.82%. This result is also sta-
+6Available in the form of an appendix.
+Table 3: As for Table 2 except for the ASVspoof DF database,
+evaluation set. Since there is no ASV in the DF scenario, there
+are no min t-DCF results. The last two lines show results for an
+LA-optimised DA conﬁguration.
+front-end
+SA
+DA
+Pooled EER
+sinc-layer
+×
+×
+21.06 (22.11)
+wav2vec 2.0
+×
+×
+7.69 (9.48)
+sinc-layer
+✓
+×
+23.22 (25.08)
+wav2vec 2.0
+✓
+×
+4.57 (7.70)
+sinc-layer
+✓
+✓
+24.42 (25.38)
+wav2vec 2.0
+✓
+✓
+2.85 (3.69)
+sinc-layer
+✓
+✓*
+20.04 (20.50)
+wav2vec 2.0
+✓
+✓*
+6.64 (7.32)
+tistically signiﬁcant. This result corresponds to a relative im-
+provement of almost 90% when compared to the baseline EER
+of 7.65%. To the best of our knowledge, this is the lowest EER
+reported for the ASVspoof 2021 LA database.
+7.4. DeepFake results
+Results for exactly the same experiments, but for the ASVspoof
+2021 DeepFake (DF) database, are shown in Table 3. While
+neither SA, nor DA improve upon the baseline EER of 21.06%,
+consistency improvements are obtained for the wav2vec 2.0
+front-end for which the EER drops from 7.69% to 2.85% us-
+ing both SA and DA. This result is also statistically signiﬁ-
+cant. To the best of our knowledge, this is the lowest EER
+reported for the ASVspoof 2021 DF database. These results,
+while determined with the same wav2vec 2.0 front-end used
+for LA experiments, relate to a DA strategy optimised for the
+DF database (stationary signal-independent additive randomly
+coloured noise – see Section 6.2). Results for exactly the same
+setup, using the DA strategy optimised for LA (linear and non-
+linear convolutive noise and impulsive signal-dependent addi-
+tive noise) are shown in the last two rows of Table 3. While
+the EER increases to 6.64%, this is still a competitive result and
+is 67% lower relative to the result of 20.04% for the sinc-layer
+front-end. Whereas a component of the DF database originates
+from the same VCTK database as the entire LA database, other
+components are sourced from multiple different corpora (Voice
+Conversion Challenge 2018 and 2020 databases) [2] including
+spoofed utterances generated with more than 100 different algo-
+rithms. With the ASVspoof 2019 LA training data containing
+neither codec or transmission variability (LA evaluation data),
+nor compression variability (DF evaluation), results show that
+the use of better pre-trained models leads to consistent improve-
+ments in generalisation, here being previously unseen spooﬁng
+attacks. Results for the DF database show that the beneﬁt ex-
+tends also to the case of domain mismatch.
+7.5. Simpliﬁed CM solution
+The last set of experiments were performed in order to gauge the
+relative importance of the AASIST and whether the improve-
+ments in generalisation are obtained for a simpler CM solu-
+tion. We removed the RawNet2-based encoder and replaced
+AASIST with a simple back-end comprising a max-pooling
+*Results using the DA strategy optimised for LA (linear and non-
+linear convolutive noise and impulsive signal-dependent additive noise).
+Table 4: Pooled EER and pooled min t-DCF (LA only) results
+for the ASVspoof 2021 LA and DF databases (DBs), evaluation
+sets, using DB-optimised DA and the simpliﬁed back-end.
+front-end
+DA
+DB
+Pooled EER
+Pooled min t-DCF
+wav2vec 2.0
+✓†
+LA
+1.19
+0.2175
+wav2vec 2.0
+✓†
+DF
+4.38
+-
+layer, a single graph layer and a single linear layer. Results
+for both ASVspoof 2021 LA and DF databases using optimised
+DA strategies for each are shown in Table 4. LA and DF results
+of 1.19% and 4.38% show that competitive EERs can obtained
+using the ﬁne-tuned wav2vec 2.0 front-end even with relatively
+less complex networks and that the beneﬁts to generalisation are
+still complementary to those of DA.
+8. Conclusions and discussion
+We report in this paper our attempts to harness the power of
+self-supervised learning in the form of the popular wav2vec
+2.0 front-end to learn more reliable representations to improve
+spooﬁng detection performance. We show that a well-trained,
+ﬁne-tuned front-end, even when learned initially using massive
+quantities of only bona ﬁde utterances, can improve generalisa-
+tion substantially. Compared to a sinc-layer front-end, when
+coupled with a new self-attentive aggregation layer and data
+augmentation, the wav2vec 2.0 front-end delivers up to a 90%
+relative reduction in the equal error rate for the logical access
+spooﬁng detection task and up to an 88% relative reduction
+for a domain mis-matched Deepfake detection task in which
+spoofed utterances are generated with more than 100 different
+attack algorithms. Improvements stemming from the use of the
+self-supervised wav2vec 2.0 front-end are consistent for every
+experimental comparison and, to the best of the authors’ knowl-
+edge, results are the lowest reported EERs for both LA and DF
+databases to date.
+We must nonetheless acknowledge that almost all results
+reported in the literature are derived using ﬁxed training data,
+whereas those reported in this paper are derived from a model
+pre-trained using additional external data. Given that our results
+are obtained with different systems trained using different data,
+comparisons to the majority of results reported in the literature
+are obviously not fair. The scale of the improvements, however,
+up to a 90% relative reduction in EER, indicate the potential
+gain in performance that can be obtained with the use of addi-
+tional, external training data and might suggest that the training
+data restrictions for ASVspoof evaluations might be relaxed.
+Nonetheless, the wav2vec 2.0 model is massively more com-
+plex when compared to the previous state-of-the-art solutions.
+Whether or not solutions with such footprints can be adapted to
+support practical applications remains to seen.
+Future work should investigate which particular character-
+istics of the self-supervised front-end are most beneﬁcial. One
+objective of such work is to use the results of such analysis as
+a starting point to scale down the model size and complexity so
+that it might be more easily adopted for practical scenarios with
+modest computational resources.
+†We used their respective optimised DA strategies for LA and DF
+as described in Section 6.2
+9. References
+[1] A. Nautsch, X. Wang, et al., “ASVspoof 2019: spoof-
+ing countermeasures for the detection of synthesized, con-
+verted and replayed speech,” IEEE Transactions on Bio-
+metrics, Behavior, and Identity Science (T-BIOM), vol. 3,
+2021.
+[2] J. Yamagishi, X. Wang, et al., “ASVspoof 2021: acceler-
+ating progress in spoofed and deepfake speech detection,”
+in Proc. ASVspoof 2021 Workshop, 2021.
+[3] A. Tomilov, A. Svishchev, et al.,
+“STC Antispooﬁng
+Systems for the ASVspoof 2021 Challenge,”
+in Proc.
+ASVspoof 2021 Workshop, 2021.
+[4] T. Chen, E. Khoury, et al., “Pindrop Labs’ Submission to
+the ASVspoof 2021 Challenge,” in Proc. ASVspoof 2021
+Workshop, 2021.
+[5] W. H Kang, J. Alam, et al., “CRIM’s system description
+for the ASVspoof 2021 Challenge,” in Proc. ASVspoof
+2021 Workshop, 2021.
+[6] J. C´aceres, R. Font, et al., “The Biometric Vox System for
+the ASVspoof 2021 Challenge,” in Proc. ASVspoof 2021
+Workshop, 2021.
+[7] R. K Das, “Known-unknown Data Augmentation Strate-
+gies for Detection of Logical Access, Physical Access and
+Speech Deepfake Attacks: ASVspoof 2021,”
+in Proc.
+ASVspoof 2021 Workshop, 2021.
+[8] X. Chen, Y. Zhang, et al., “UR Channel-Robust Synthetic
+Speech Detection System for ASVspoof 2021,” in Proc.
+ASVspoof 2021 Workshop, 2021.
+[9] X. Wang, X. Qin, et al., “The DKU-CMRI System for the
+ASVspoof 2021 Challenge: Vocoder based Replay Chan-
+nel Response Estimation,” in Proc. ASVspoof 2021 Work-
+shop, 2021.
+[10] J. Jung, H. Heo, et al., “AASIST: Audio Anti-Spooﬁng
+using Integrated Spectro-Temporal Graph Attention Net-
+works,” in Proc. ICASSP (to appear), 2022.
+[11] Aaron Van den Oord, Yazhe Li, and Oriol Vinyals, “Rep-
+resentation learning with contrastive predictive coding,”
+in Proc. of NIPS, 2018.
+[12] A. Baevski, Y. Zhou, et al., “Wav2vec 2.0: A Framework
+for Self-Supervised Learning of Speech Representations,”
+in in Proc NIPS, 2020, vol. 33.
+[13] A. Babu, C. Wang, et al., “XLS-R: Self-supervised cross-
+lingual speech representation learning at scale,”
+arXiv
+preprint arXiv:2111.09296, 2021.
+[14] S.-w. Yang, P.-H. Chi, et al., “SUPERB: Speech process-
+ing Universal PERformance Benchmark,”
+in Proc. IN-
+TERSPEECH, 2021.
+[15] A. Conneau, A. Baevski, et al.,
+“Unsupervised cross-
+lingual representation learning for speech recognition,” in
+Proc. INTERSPEECH, 2021.
+[16] K. Kawakami, L. Wang, et al.,
+“Learning Robust and
+Multilingual Speech Representations,” in Proc. EMNLP,
+2020.
+[17] D. Cai, W. Wang, et al., “An iterative framework for self-
+supervised deep speaker representation learning,” in Proc.
+ICASSP, 2021.
+[18] A. Tjandra, D. Gon Choudhury, et al.,
+“Improved lan-
+guage identiﬁcation through cross-lingual self-supervised
+learning,” arXiv preprint arXiv:2107.04082, 2021.
+[19] S. Evain, H. Nguyen, et al., “LeBenchmark: A Repro-
+ducible Framework for Assessing Self-Supervised Rep-
+resentation Learning from Speech,”
+in Proc. INTER-
+SPEECH, 2021.
+[20] Y. Xie, Z. Zhang, et al., “Siamese Network with wav2vec
+Feature for Spooﬁng Speech Detection,” in Proc. INTER-
+SPEECH, 2021.
+[21] X. Wang and J. Yamagishi, “Investigating self-supervised
+front ends for speech spooﬁng countermeasures,” arXiv
+preprint arXiv:2111.07725, 2021.
+[22] F. Alegre, A. Amehraye, et al., “A one-class classiﬁca-
+tion approach to generalised speaker veriﬁcation spoof-
+ing countermeasures using local binary patterns,” in Proc.
+IEEE Sixth International Conference on Biometrics: The-
+ory, Applications and Systems (BTAS), 2013.
+[23] T. Chen, A. Kumar, et al., “Generalization of Audio Deep-
+fake Detection,”
+in Proc. Speaker Odyssey Workshop,
+2020.
+[24] R. K. Das, J. Yang, et al., “Data Augmentation with Signal
+Companding for Detection of Logical Access Attacks,” in
+Proc. ICASSP, 2021.
+[25] Y. Zhang, G. Zhu, et al., “An Empirical Study on Chan-
+nel Effects for Synthetic Voice Spooﬁng Countermeasure
+Systems,” in Proc. INTERSPEECH, 2021.
+[26] X. Chen, Y. Zhang, et al., “UR Channel-Robust Synthetic
+Speech Detection System for ASVspoof 2021,” in Proc.
+ASVspoof 2021 Workshop, 2021.
+[27] H. Tak, M. Kamble, et al.,
+“RawBoost: A Raw Data
+Boosting and Augmentation Method applied to Automatic
+Speaker Veriﬁcation Anti-Spooﬁng,” in Proc. ICASSP (to
+appear), 2022.
+[28] J. Devlin, M.-W Chang, et al., “BERT: Pre-training of
+Deep Bidirectional Transformers for Language Under-
+standing,” in Proc. NAACL-HLT, 2019.
+[29] A. v. d. Oord, Y. Li, et al.,
+“Representation learn-
+ing with contrastive predictive coding,”
+CoRR, vol.
+abs/1807.03748, 2018.
+[30] Y.-A Chung, Y. Belinkov, et al.,
+“Similarity Analysis
+of Self-Supervised Speech Representations,”
+in Proc.
+ICASSP, 2021.
+[31] S. Schneider, A. Baevski, et al.,
+“Wav2vec: Unsuper-
+vised Pre-Training for Speech Recognition,” in INTER-
+SPEECH, 2019.
+[32] W.-N. Hsu, B. Bolte, et al., “HuBERT: Self-Supervised
+Speech Representation Learning by Masked Prediction of
+Hidden Units,” arXiv preprint arXiv:2106.07447, 2021.
+[33] W.-N. Hsu, Y.-H. H. Tsai, et al., “HuBERT: How much
+can a bad teacher beneﬁt ASR pre-training?,”
+in Proc.
+ICASSP, 2021.
+[34] Q. Xu, A. Baevski, et al., “Self-training and pre-training
+are complementary for speech recognition,”
+in Proc.
+ICASSP, 2021.
+[35] S. Chen, C. Wang, et al.,
+“WavLM: Large-Scale Self-
+Supervised Pre-Training for Full Stack Speech Process-
+ing,” arXiv preprint arXiv:2110.13900, 2021.
+[36] X. Xu, Y. Kang, et al., “Explore wav2vec 2.0 for Mispro-
+nunciation Detection,” in Proc. INTERSPEECH, 2021.
+[37] L. Peng, K. Fu, et al., “A Study on Fine-Tuning wav2vec2.
+0 Model for the Task of Mispronunciation Detection and
+Diagnosis,” in Proc. INTERSPEECH, 2021.
+[38] N. Vaessen and D. A van Leeuwen,
+“Fine-tuning
+wav2vec2 for speaker recognition,”
+arXiv preprint
+arXiv:2109.15053, 2021.
+[39] Z. Fan, M. Li, et al., “Exploring wav2vec 2.0 on speaker
+veriﬁcation and language identiﬁcation,” in Proc. INTER-
+SPEECH, 2021.
+[40] L. Pepino, P. Riera, et al., “Emotion Recognition from
+Speech Using Wav2vec 2.0 Embeddings,” in Proc. IN-
+TERSPEECH, 2021.
+[41] C. Wang, M. Rivi`ere, et al., “VoxPopuli: A large-scale
+multilingual speech corpus for representation learning,
+semi-supervised learning and interpretation,” in Proc. of
+Annual Meeting of the Association for Computational Lin-
+guistics (ACL), 2021.
+[42] V. Pratap, Q. Xu, et al.,
+“MLS: A Large-Scale Multi-
+lingual Dataset for Speech Research,” in Proc. INTER-
+SPEECH, 2020.
+[43] R. Ardila, M. Branson, et al.,
+“Common Voice:
+A
+Massively-Multilingual Speech Corpus,” in Proc. LREC,
+2020.
+[44] J. Valk and T. Alum¨ae,
+“VoxLingua107: a dataset for
+spoken language recognition,” in Proc. Spoken Language
+Technology Workshop (SLT), 2021.
+[45] M. JF Gales, K. M Knill, et al.,
+“Speech recognition
+and keyword spotting for low-resource languages: BA-
+BEL project research at CUED,”
+in Proc. Spoken lan-
+guage technologies for under-resourced languages work-
+shop (SLTU), 2014.
+[46] M. Ravanelli and Y. Bengio, “Speaker recognition from
+raw waveform with SincNet,” in IEEE Proc. SLT, 2018.
+[47] H. Tak, J. Jung, et al., “End-to-end spectro-temporal graph
+attention networks for speaker veriﬁcation anti-spooﬁng
+and speech deepfake detection,” in Proc. ASVspoof 2021
+workshop, 2021.
+[48] P. Veliˇckovi´c, G. Cucurull, et al., “Graph attention net-
+works,” in Proc. ICLR, 2018.
+[49] H. Gao and S. Ji, “Graph u-nets,” in Proc. international
+conference on machine learning (PMLR), 2019.
+[50] Xiao Wang, Houye Ji, Chuan Shi, Bai Wang, Yanfang Ye,
+Peng Cui, and Philip S Yu, “Heterogeneous graph atten-
+tion network,” in Proc. The World Wide Web (WWW) Con-
+ference, 2019.
+[51] A. Vaswani, N. Shazeer, et al., “Attention is all you need,”
+in Proc. NIPS, 2017.
+[52] M. Ott, S. Edunov, et al., “fairseq: A Fast, Extensible
+Toolkit for Sequence Modeling,” in Proc. NAACL-HLT
+2019: Demonstrations, 2019.
+[53] K. Okabe, T. Koshinaka, et al.,
+“Attentive statistics
+pooling for deep speaker embedding,” in Proc. INTER-
+SPEECH, 2018.
+[54] Y. Jung, S. M Kye, et al., “Improving Multi-Scale Aggre-
+gation Using Feature Pyramid Module for Robust Speaker
+Veriﬁcation of Variable-Duration Utterances,”
+in Proc.
+INTERSPEECH, 2020.
+[55] J.-w. Jung, H.-S. Heo, et al., “Graph attention networks
+for speaker veriﬁcation,” in Proc. ICASSP, 2021.
+[56] W. Xie, A. Nagrani, et al., “Utterance-level aggregation
+for speaker recognition in the wild,”
+in Proc. ICASSP,
+2019.
+[57] J.-h. Kim, H.-j. Shim, et al., “RawNeXt: Speaker veri-
+ﬁcation system for variable-duration utterances with deep
+layer aggregation and extended dynamic scaling policies,”
+in Proc. ICASSP (to appear), 2022.
+[58] H.-j Shim, J. Heo, et al., “Graph attentive feature aggre-
+gation for text-independent speaker veriﬁcation,” in Proc.
+ICASSP (to appear), 2022.
+[59] G. Klambauer, T. Unterthiner, et al., “Self-normalizing
+neural networks,” in Proc. NIPS, 2017.
+[60] S. Ioffe and C. Szegedy, “Batch normalization: Acceler-
+ating deep network training by reducing internal covari-
+ate shift,” in Proc. International Conference on Machine
+Learning (ICML), 2015.
+[61] M. Todisco, X. Wang, et al., “ASVspoof 2019: Future
+Horizons in Spoofed and Fake Audio Detection,” in Proc.
+INTERSPEECH, 2019.
+[62] X. Wang, J. Yamagishi, et al., “ASVspoof 2019: a large-
+scale public database of synthetized, converted and re-
+played speech,”
+Computer Speech & Language (CSL),
+vol. 64, 2020, 101114.
+[63] C. Veaux, J. Yamagishi, et al., “CSTR VCTK Corpus:
+English Multi-speaker Corpus for CSTR Voice Cloning
+Toolkit,” 2017, http://dx.doi.org/10.7488/ds/1994.
+[64] N. Br¨ummer and E. de Villiers, “The BOSARIS toolkit:
+Theory, algorithms and code for surviving the new DCF,”
+arXiv preprint arXiv:1304.2865, 2013.
+[65] T. Kinnunen, H. Delgado, et al., “Tandem Assessment of
+Spooﬁng Countermeasures and Automatic Speaker Veri-
+ﬁcation: Fundamentals,” IEEE/ACM Transactions on Au-
+dio Speech and Language Processing (TASLP), vol. 28,
+2020.
+[66] T. Painter and A. Spanias, “Perceptual coding of digital
+audio,” Proceedings of the IEEE, vol. 88, no. 4, 2000.
+[67] D. P Kingma and J. Ba, “Adam: A method for stochastic
+optimization,” arXiv preprint arXiv:1412.6980, 2014.
+[68] I. Goodfellow, Y. Bengio, and A. Courville,
+Deep
+Learning,
+MIT Press,
+2016,
+http://www.
+deeplearningbook.org.
+[69] X. Wang and J. Yamagishi,
+“A Comparative Study on
+Recent Neural Spooﬁng Countermeasures for Synthetic
+Speech Detection,” in Proc. INTERSPEECH, 2021.
+[70] A. Kanervisto, V. Hautam¨aki, et al.,
+“Optimizing Tan-
+dem Speaker Veriﬁcation and Anti-Spooﬁng Systems,”
+IEEE/ACM TASLP, vol. 30, 2021.
+A. Statistical analysis results
+Front-end
+SA
+Sinc-layer
+Sinc-layer
+Sinc-layer
+wav2vec 2.0
+wav2vec 2.0
+wav2vec 2.0
+✓
+✓
+✓
+✓
+✓
+✓
+╳
+╳
+╳
+╳
+╳
+╳
+Sinc-layer
+Sinc-layer
+Sinc-layer
+wav2vec 2.0
+wav2vec 2.0
+wav2vec 2.0
+✓
+✓
+✓
+✓
+✓
+✓
+╳
+╳
+╳
+╳
+╳
+╳
+2021 LA 
+2021 DF
+Front-end
+SA
+DA
+Sinc-layer
+Sinc-layer
+Sinc-layer
+wav2vec 2.0
+wav2vec 2.0
+wav2vec 2.0
+✓
+✓
+✓
+✓
+✓
+✓
+╳
+╳
+╳
+╳
+╳
+╳
+DA
+Figure 4: Statistical signiﬁcance test using EERs on LA and DF 2021 evaluation dataset and Holm-Bonferroni correction with α =
+0.05. Gray colour indicates signiﬁcant difference, and insigniﬁcant difference indicates by white colour. Each square in the black
+square contains 3 × 3 entries and denotes pair-wise tests between three training-evaluation runs of two models. Front-end systems are
+in the same order as that in Table 2 and Table 3.
+B. Breakdown EER’s (%) pooled over attacks on ASVspoof 2021 LA and DF databases
+Table 5: Breakdown results in terms of EERs (%) for each codec conditions (C1-C7) of Table 2 on ASVspoof 2021 LA evaluation
+partition. Results are the best (average) obtained from three runs of each ex-periment with different random seeds.
+front-end
+SA
+DA
+C1
+C2
+C3
+C4
+C5
+C6
+C7
+Pooled EER
+Pooled min t-DCF
+Sinc layer
+×
+×
+6.36
+6.76
+15.64
+7.85
+6.37
+10.40
+12.39
+11.47 (11.95)
+0.5081 (0.5139)
+wav2vec 2.0
+×
+×
+2.06
+3.31
+19.09
+2.79
+3.18
+7.55
+4.63
+6.15 (6.46)
+0.3577 (0.3587)
+Sinc layer
+✓
+×
+2.36
+5.25
+16.72
+3.09
+4.80
+6.66
+4.97
+8.73(11.61)
+0.4285 (0.5203)
+wav2vec 2.0
+✓
+×
+0.26
+1.19
+7.84
+0.77
+1.02
+4.97
+2.89
+4.48 (6.15)
+0.3094 (0.3482)
+Sinc layer
+✓
+✓
+3.75
+5.77
+6.87
+4.61
+5.57
+6.58
+7.08
+7.65 (7.87)
+0.3894 (0.3960)
+wav2vec 2.0
+✓
+✓
+0.30
+0.58
+0.56
+0.67
+0.52
+0.81
+0.98
+0.82 (1.00)
+0.2066 (0.2120)
+Table 6: Breakdown results in terms of EERs (%) for each codec conditions (DFC1-DFC8) of Table 3 on ASVspoof 2021 DF evaluation
+partition.
+front-end
+SA
+DA
+DF-C1
+DF-C2
+DF-C3
+DF-C4
+DF-C5
+DF-C6
+DF-C7
+DF-C8
+Pooled EER
+Sinc layer
+×
+×
+23.53
+24.74
+24.05
+23.84
+19.06
+17.58
+18.49
+19.06
+21.06 (22.11)
+wav2vec 2.0
+×
+×
+8.21
+9.04
+8.02
+8.11
+6.15
+6.31
+6.93
+6.06
+7.69 (9.48)
+Sinc layer
+✓
+×
+26.98
+28.25
+27.84
+27.40
+19.93
+19.32
+20.11
+19.66
+23.22 (25.08)
+wav2vec 2.0
+✓
+×
+4.58
+4.84
+4.07
+4.28
+3.41
+3.71
+4.10
+3.53
+4.57 (7.70)
+Sinc layer
+✓
+✓
+28.81
+29.12
+29.07
+28.38
+21.11
+20.50
+21.02
+20.89
+24.42 (25.38)
+wav2vec 2.0
+✓
+✓
+2.34
+4.30
+2.64
+2.37
+2.58
+1.92
+3.31
+2.75
+2.85 (3.69)
+Sinc layer
+✓
+✓*
+23.98
+24.56
+24.83
+23.67
+17.01
+16.39
+17.23
+16.48
+20.04 (20.50)
+wav2vec 2.0
+✓
+✓*
+7.88
+5.62
+7.05
+7.51
+5.18
+6.06
+5.22
+5.36
+6.64 (7.32)
+∗Results using the DA strategy optimised for LA (linear and non-linear convolutive noise and impulsive signal-dependent additive
+noise).

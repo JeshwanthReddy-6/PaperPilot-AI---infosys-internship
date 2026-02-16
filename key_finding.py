@@ -57,4 +57,3 @@ def extract_key_findings():
 
         print(f"Extracted {len(key_sentences)} key findings from {filename}")
 
-extract_key_findings()

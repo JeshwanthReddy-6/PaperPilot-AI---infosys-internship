@@ -39,7 +39,6 @@ URL: {meta['paper_url']}
 Key Findings:
 {findings}
 """
-    print(combined)
     return combined
 
 
@@ -85,12 +84,13 @@ Key Findings and Metadata:
 
     return response.choices[0].message.content
 
-if __name__ == "__main__":
+def call_funstion():
     paper = generate_synthesized_paper()
 
-    os.makedirs("data/output", exist_ok=True)
+    os.makedirs("data/output/", exist_ok=True)
 
     with open("data/output/synthesized_paper.txt", "w", encoding="utf-8") as f:
         f.write(paper)
+    return paper
 
-    print("Synthesized research paper generated successfully.")
+

@@ -1,0 +1,20 @@
+the principal contributions of this work are: (i) improved
+generalisation and domain robustness using a pre-trained, self-
+supervised speech model with ﬁne-tuning; (ii) additional im-
+provements using data augmentation showing complementary
+beneﬁts to self-supervised learning; (iii) a new self-attention
+based aggregation layer which brings complementary improve-
+ments.
+a sum-
+mary of the wav2vec 2.0 front-end and downstream aasist
+model conﬁgurations is presented in table 1.
+results
+we present ﬁve sets of experiments.
+compared to a sinc-layer front-end, when
+coupled with a new self-attentive aggregation layer and data
+augmentation, the wav2vec 2.0 front-end delivers up to a 90%
+relative reduction in the equal error rate for the logical access
+spooﬁng detection task and up to an 88% relative reduction
+for a domain mis-matched deepfake detection task in which
+spoofed utterances are generated with more than 100 different
+attack algorithms.
