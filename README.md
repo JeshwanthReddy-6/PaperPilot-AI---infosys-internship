@@ -24,7 +24,7 @@ The agent then extracts key findings, summarizes them using a LLaMA model via th
   - Edit or change the title.
   - Adjust sections for clarity or emphasis.
 - 💾 Download the final summarized paper.
-
+- 🔗 Compare research papers pairwise by calculating **cosine similarity scores** to measure content overlap. 
 ---
 
 ## 🚀 Getting Started
@@ -51,3 +51,4 @@ cd ai_research_agent
 # Run the UI
 
 python ui.py
+
