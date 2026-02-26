@@ -168,7 +168,7 @@ button {
 # -------------------------
 
 with gr.Blocks(
-    title="AI Research Agent",
+    title="PaperPilot AI",
     theme=gr.themes.Base(),
     css=custom_css,
 ) as demo:
@@ -200,7 +200,7 @@ with gr.Blocks(
     """)
 
     gr.Markdown("""
-    # 🤖 AI Research Agent  
+    # 🤖 PaperPilot AI  
     ### Automated Research Paper Discovery, Synthesis & Comparison
     """)
 
