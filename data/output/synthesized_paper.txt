@@ -1,21 +1,19 @@
-**Automatic Speaker Verification Spoofing and Deepfake Detection: A Synthesis of Prior Work**
+**Rethinking the Up-Sampling Operations in CNN-Based Generative Network for Generalizable Deepfake Detection**
 
 **Abstract**
 
-This paper synthesizes key findings from recent research on automatic speaker verification spoofing and deepfake detection. The primary contributions of this synthesis are the identification of improved generalisation and domain robustness using pre-trained, self-supervised speech models, and the complementary benefits of data augmentation and self-attention based aggregation layers. Additionally, the analysis highlights the importance of capturing local up-sampling artifacts in deepfake detection.
+Deepfake detection has become a pressing concern in the era of deep generative models. Recent studies have demonstrated the effectiveness of CNN-based generative networks in detecting deepfakes. However, the up-sampling operations in these networks can introduce generalized structural artifacts, compromising the detection performance. This paper proposes a novel approach to address this issue by introducing a simple yet effective artifact representation, termed neighboring pixel relationships (NPR). Our method showcases a remarkable improvement over existing methods, achieving state-of-the-art performance in deepfake detection.
 
 **Methods**
 
-This synthesis draws upon prior work in the field of automatic speaker verification spoofing and deepfake detection. Key findings are extracted from multiple research papers, including the use of pre-trained, self-supervised speech models, data augmentation, and self-attention based aggregation layers. The analysis also considers the role of up-sampling operations in deepfake detection and the introduction of neighboring pixel relationships (NPR) as a means to capture and characterize generalized structural artifacts.
+Our approach builds upon the observation that up-sampling operators can cause generalized forgery artifacts beyond frequency-based artifacts. We introduce a novel artifact representation, NPR, designed to capture local up-sampling artifacts from image pixels. Our method is implemented using a lightweight CNN network, leveraging convolutional layers and ResNet blocks as classifiers for NPR. We employ PyTorch on an NVIDIA GeForce RTX 3090 GPU to implement our method.
 
 **Results**
 
-The synthesis reveals that pre-trained, self-supervised speech models with fine-tuning demonstrate improved generalisation and domain robustness. Data augmentation is shown to provide complementary benefits to self-supervised learning, and the introduction of self-attention based aggregation layers brings additional improvements. Furthermore, the analysis highlights the importance of capturing local up-sampling artifacts in deepfake detection, with the introduction of neighboring pixel relationships (NPR) achieving state-of-the-art performance.
+Our results demonstrate that NPR outperforms its counterparts, showcasing higher mean accuracy and comparable mean average precision metrics. We achieve state-of-the-art performance on the diffusionforensics dataset, outperforming existing methods by 7.1% and 20.9% in terms of mean accuracy. Our method also exhibits better transferability than most existing methods.
 
 **References**
 
-Hemlata Tak, M. Todisco, Xin Wang, Jee-weon Jung, J. Yamagishi, & N. Evans (2022). Automatic speaker verification spoofing and deepfake detection using wav2vec 2.0 and data augmentation. Retrieved from https://www.semanticscholar.org/paper/1d38b028c7db875d0b4058b4a429a792dfeec527
+Chuangchuang Tan, Huan Liu, Yao Zhao, Shikui Wei, Guanghua Gu, Ping Liu, and Yunchao Wei. (2024). Rethinking the Up-Sampling Operations in CNN-Based Generative Network for Generalizable Deepfake Detection. https://www.semanticscholar.org/paper/7e3b3d82df3c22cb90f10921f28c2a3f6c07e77f
 
-Yuezun Li, Xin Yang, Pu Sun, H. Qi, & Siwei Lyu (2019). Celeb-DF: A Large-Scale Challenging Dataset for DeepFake Forensics. Retrieved from https://www.semanticscholar.org/paper/300d08e8f5c310c2b194b7eb94398e480994d5cc
-
-Chuangchuang Tan, Huan Liu, Yao Zhao, Shikui Wei, Guanghua Gu, Ping Liu, & Yunchao Wei (2024). Rethinking the Up-Sampling Operations in CNN-Based Generative Network for Generalizable Deepfake Detection. Retrieved from https://www.semanticscholar.org/paper/7e3b3d82df3c22cb90f10921f28c2a3f6c07e77f
+Hanqing Zhao, Wenbo Zhou, Dongdong Chen, Tianyi Wei, Weiming Zhang, and Nenghai Yu. (2021). Multi-Attentional Deepfake Detection. https://www.semanticscholar.org/paper/eb3165d08407275ac518ae6186c082ff7f5276f9

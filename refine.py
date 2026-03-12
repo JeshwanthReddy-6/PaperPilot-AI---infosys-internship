@@ -5,7 +5,7 @@ import os
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def refine_synthesized_paper(existing_paper, instruction):
+def refine_synthesized_paper(existing_paper, instruction, session_id):
     prompt = f"""
 You are an academic editor.
 
@@ -16,12 +16,15 @@ The user has requested the following customization:
 
 Apply ONLY this customization.
 
-Rules:
+STRICT RULES:
 - Do NOT invent new information.
 - Do NOT add new references.
-- Preserve APA-style structure.
+- Preserve the EXACT same structure (Title, Abstract, Methods, Results, References).
 - Return the FULL updated paper.
 - Do NOT explain changes.
+- Do NOT use any markdown formatting like **, ##, *, or similar symbols.
+- Keep section headers as plain text (Abstract, Methods, Results, References).
+- Do NOT wrap any text in special characters.
 
 Paper:
 {existing_paper}
@@ -36,8 +39,9 @@ Paper:
     refined_text = response.choices[0].message.content
 
     # regenerate PDF
-    os.makedirs("data/output", exist_ok=True)
-    pdf_path = "data/output/synthesized_paper.pdf"
+    output_dir = f"user_sessions/{session_id}/output"
+    os.makedirs(output_dir, exist_ok=True)
+    pdf_path = f"{output_dir}/synthesized_paper.pdf"
     text_to_pdf(refined_text, pdf_path)
 
     return refined_text, pdf_path

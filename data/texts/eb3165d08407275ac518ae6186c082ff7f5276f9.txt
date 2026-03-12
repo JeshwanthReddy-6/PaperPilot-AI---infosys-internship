@@ -1,0 +1,1782 @@
+Multi-attentional Deepfake Detection
+Hanqing Zhao1
+Wenbo Zhou1,†
+Dongdong Chen2
+Tianyi Wei1
+Weiming Zhang1,†
+Nenghai Yu1
+University of Science and Technology of China1
+Microsoft Cloud AI2
+{zhq2015@mail, welbeckz@, bestwty@mail, zhangwm@, ynh@}.ustc.edu.cn
+cddlyf@gmail.com
+Abstract
+Face forgery by deepfake is widely spread over the in-
+ternet and has raised severe societal concerns. Recently,
+how to detect such forgery contents has become a hot re-
+search topic and many deepfake detection methods have
+been proposed.
+Most of them model deepfake detection
+as a vanilla binary classiﬁcation problem, i.e, ﬁrst use a
+backbone network to extract a global feature and then feed
+it into a binary classiﬁer (real/fake). But since the differ-
+ence between the real and fake images in this task is often
+subtle and local, we argue this vanilla solution is not op-
+timal. In this paper, we instead formulate deepfake detec-
+tion as a ﬁne-grained classiﬁcation problem and propose a
+new multi-attentional deepfake detection network. Speciﬁ-
+cally, it consists of three key components: 1) multiple spa-
+tial attention heads to make the network attend to differ-
+ent local parts; 2) textural feature enhancement block to
+zoom in the subtle artifacts in shallow features; 3) aggre-
+gate the low-level textural feature and high-level semantic
+features guided by the attention maps. Moreover, to address
+the learning difﬁculty of this network, we further introduce
+a new regional independence loss and an attention guided
+data augmentation strategy. Through extensive experiments
+on different datasets, we demonstrate the superiority of our
+method over the vanilla binary classiﬁer counterparts, and
+achieve state-of-the-art performance. The models will be
+released recently at https://github.com/yoctta/
+multiple-attention.
+1. Introduction
+Beneﬁting from the great progress in generative mod-
+els, deepfake techniques have achieved signiﬁcant success
+recently and various face forgery methods [19, 41, 21, 31,
+32, 44, 28, 38] have been proposed. As such techniques
+† Corresponding Author.
+0
+0
+100
+100 -
+200
+200 -
+300
+300 -
+200
+0
+200
+0
+0
+100
+200
+300
+0
+200
+0
+200
+Figure 1: Example of the multiple attentional regions ob-
+tained by our method. The attention regions are separated
+and respond to different discriminative features.
+can generate high-quality fake videos that are even indistin-
+guishable for human eyes, they can easily be abused by ma-
+licious users to cause severe societal problems or political
+threats. To mitigate such risks,many deepfake detection ap-
+proaches [27, 34, 22, 33, 26, 45] have been proposed. Most
+of them model deepfake detection as a vanilla binary clas-
+siﬁcation problem (real/fake). Basically, they often ﬁrst use
+a backbone network to extract global features of the suspect
+image and then feed them into a binary classiﬁer to discrim-
+inate the real and fake ones.
+However, as the counterfeits become more and more re-
+alistic, the differences between real and fake ones will be-
+come more subtle and local, thus making such global fea-
+ture based vanilla solutions work not well. But actually,
+such subtle and local property shares a similar spirit as the
+ﬁne-grained classiﬁcation problem.
+For example, in the
+ﬁne-grained bird classiﬁcation task, some species look very
+similar and only differentiate from each other by some small
+and local differences, such as the shape and color of the
+beak. Based on this observation, we propose to model deep-
+fake detection as a special ﬁne-grained classiﬁcation prob-
+1
+arXiv:2103.02406v3  [cs.CV]  8 Mar 2021
+lem with two categories.
+Inspired by the success of parts based model in the
+ﬁne-grained classiﬁcation ﬁeld, this paper presents a novel
+multi-attention network for deepfake detection.
+First, in
+order to make the network attend to different potential ar-
+tifacts regions, we design multi-attention heads to predict
+multiple spatial attention maps by using the deep semantic
+features. Second, to prevent the subtle difference from dis-
+appearing in the deep layers, we enhance the textural feature
+obtained from shallow layers and then aggregate both low-
+level texture features and high-level semantic features as the
+representation for each local part. Finally, the feature rep-
+resentations of each local part will be independently pooled
+by a bilinear attention pooling layer and fused as the repre-
+sentation for the whole image. Figure 1 gives an example
+of the discriminative features obtained by our method.
+However, training such a multi-attentional network is not
+a trivial problem. This is mainly because that, unlike single-
+attentional network [6] which can use the video-level labels
+as explicit guidance and be trained in a supervised way, the
+multi-attentional structure can only be trained in an unsu-
+pervised or weakly-supervised way. By using a common
+learning strategy, we ﬁnd the multi-attention heads will de-
+grade to a single-attention counterpart, i.e., only one atten-
+tion region produces a strong response while all remaining
+attention regions are suppressed and can not capture use-
+ful information. To address this problem, we further pro-
+pose a new attention guided data augmentation mechanism.
+In detail, during training, we will deliberately blur some
+high-response attention region (soft attention dropping)
+and force the network to learn from other attention regions.
+Simultaneously, we introduce a new regional independence
+loss to encourage different attention heads to attend to dif-
+ferent local parts.
+To demonstrate the effectiveness of our multi-attentional
+network, we conduct extensive experiments on different
+existing datasets, including FaceForensics++[34], Celeb-
+DF[25] and DFDC[9]. It shows that our method is superior
+to the vanilla binary classiﬁer baselines and achieves state-
+of-the-art performance. In summary, the contributions of
+this paper are threefold as below:
+• We reformulate the deepfake detection as a ﬁne-
+grained classiﬁcation task, which brings a novel per-
+spective for this ﬁeld.
+• We propose a new multi-attentional network architec-
+ture to capture local discriminative features from mul-
+tiple face attentive regions. To train this network, we
+also introduce a regional independence loss and design
+an attention guided data augmentation mechanism to
+assist the network training in an adversarial learning
+way.
+• Extensive experiments demonstrate that our method
+outperforms the vanilla binary classiﬁcation baselines
+and achieves state-of-the-art detection performance.
+2. Related Works
+Face forgery detection is a classical problem in computer
+vision and graphics. Recently, the rapid progress in deep
+generative models makes the face forgery technique “deep”
+and can generate realistic results, which presents a new
+problem of deepfake detection and brings signiﬁcant chal-
+lenges. Most deepfake detection methods solve the problem
+as a vanilla binary classiﬁcation, however, the subtle and lo-
+cal modiﬁcations of forgeried faces make it more similar to
+ﬁne-grained visual classiﬁcation problem.
+2.1. Deepfake Detection
+Since the face forgery causes great threat to societal se-
+curity, it is of paramount importance to develop effective
+countermeasures against it. Many works [46, 23, 4, 53, 34,
+22, 33, 26, 45, 43] have been proposed. Early works [46, 23]
+detect the forgery through visual biological artifacts, e.g.,
+unnatural eye blinking or inconsistent head pose.
+As the learning based methods become mainstream,
+some works [53, 34] have proposed frameworks which ex-
+tract features from spatial domain and have achieved ex-
+cellent performances on speciﬁc datasets. Recently, more
+data domains have been considered by emerging methods.
+[45] detects tampered faces through Spatial, Steganalysis
+and Temporal features. It adds a stream of simpliﬁed Xcep-
+tion with a constrained convolution layer and an LSTM.
+[26] uses a two-branch representation extractor to combine
+information from the color domain and the frequency do-
+main using a multi-scale Laplacian of Gaussian (LoG) op-
+erator. [33] uses frequency-aware decomposition and local
+frequency statistic to expose deepfake artifacts in frequency
+domain and achieves state-of-the-art performance.
+Most existing methods treat the deepfake detection as a
+universal binary classiﬁcation problem. They focus on how
+to construct sophisticated feature extractors and then a di-
+chotomy to distinguish the real and fake faces. However,
+the photo-realistic counterfeits bring signiﬁcant challenge
+to this binary classiﬁcation framework. In this paper, we
+redeﬁne the deepfake detection problem as a ﬁne-grained
+classiﬁcation problem according to their similarity.
+2.2. Fine-grained Classiﬁcation
+Fine-grained classiﬁcation [50, 49, 13, 37, 12, 52, 47, 17,
+10] is a challenging research task in computer vision, which
+captures the local discriminative features to distinguish dif-
+ferent ﬁne-grained categories. Studies in this ﬁeld mainly
+focus on locating the discriminative regions and learning
+a diverse collection of complementary parts in weakly-
+supervised manners.
+Previous works [50, 49] build part
+2
+Bilinear
+Attention
+Pooling
+Input image 𝐼
+Backbone
+Layers 1
+Shallow layer
+𝑓𝑆𝐿𝑡(𝐼)
+Backbone
+Layers 2
+Backbone
+Layers 3
+Global feature
+𝑮
+Textural feature maps 
+𝑇𝑆𝐿𝑡
+Attention 
+Module
+Attention maps 
+𝐴
+Textural 
+feature matrix
+𝑷
+Classifier
+Real or 
+Fake
+Attention layer
+𝑓𝑆𝐿𝑎(𝐼)
+Dense 
+block
+Texture enhancement block
+average 
+pooling
+non-textural 
+feature map 𝐷
+expand residual
+Figure 2: The framework of our method. Three components play an important role in our framework: an Attention Module for generating
+multiple attention maps, a texture enhancement block for extracting and enhancing the textural information and a bidirectionally used
+bilinear attention pooling for aggregating textural and semantic features.
+models to localize objects and treat the objects and seman-
+tic parts equally. Recently, several works [52, 47, 10] have
+been proposed under a multiple attentional framework, the
+core ideal of these method is that learning discriminative re-
+gions in multiple scales or image parts simultaneously and
+encouraging the fusion of these features from different re-
+gions. In addition, [17] designs attention cropping and at-
+tention dropping to obtain more balanced attention maps.
+In this paper, we model deepfake detection as a special ﬁne-
+grained classiﬁcation problem for the ﬁrst time. It shares the
+same spirit in learning subtle and discriminative features,
+but only involves two categories, i.e., real and fake.
+3. Methods
+3.1. Overview
+In this section, we initially state the motivation of the
+designing and give a brief overview of our framework.
+As aforementioned, the discrepancy between real and fake
+faces is usually subtle and occurs in local regions, which
+is not easy to be captured by single-attentional structural
+networks. Thus we argue that decomposing the attention
+into multiple regions can be more efﬁcient for collecting
+local feature for deepfake detection task. Meanwhile, the
+global average pooling which is commonly adopted by cur-
+rent deepfake detection approaches is replaced with local
+attention pooling in our framework.
+This is mainly be-
+cause the textural patterns vary drastically among different
+regions, the extracted features from different regions may
+be averaged by the global pooling operation, resulting in
+a loss of distinguishability. On the other hand, we observe
+that the slight artifacts caused by forgery methods tend to be
+preserved in textural information of shallow features. Here,
+the textural information represents the high frequency com-
+ponent of the shallow features, just like the residual infor-
+Conv
+1x1
+BN
+ReLu
+·
+Element-wise 
+multiplication
+Textural feature 
+maps  𝑇𝑆𝐿𝑡
+Attention layer
+𝑓𝑆𝐿𝑎(𝐼)
+Attention maps 
+𝐴𝑘, 𝑘= 1, … , 4
+Textural 
+feature matrix
+𝑷
+Normalized 
+Average 
+Pooling
+Attention Module
+Procedure of obtaining textural feature matrix
+Resize
+BAP
+Figure 3: The structure of attention module and the procedure
+of obtaining textural feature matrix P. The proposed normalized
+average pooling is adopted instead of global average pooling.
+mation of RGB images. Therefore, more shallow feature
+should be focused on and enhanced, which has not been
+considered by current state-of-the-art detection approaches.
+Motivated by these observation, we propose a multi-
+attentional framework to solve the deepfake detection as a
+ﬁne-grained classiﬁcation problem. In our framework, three
+key components are integrated into the backbone network:
+1) We employ an attention module to generate multiple at-
+tention maps. 2) We use densely connected convolutional
+layers [18] as a texture enhancement block, which can ex-
+tract and enhance the textural information from shallow fea-
+ture maps. 3) We replace the global average pooling with
+Bilinear Attention Pooling(BAP). And we use BAP to col-
+lect the textural feature matrix from the shallow layer and
+retain the semantic feature from the deep layer. The frame-
+work of our method is depicted in Figure 2.
+Unlike single-attentional structure based network which
+can take the video-level labels as explicit guidance for train-
+ing, the multi-attentional based network can only be trained
+in a unsupervised or weakly-supervised manner due to the
+lack of region-level labels.
+It could lead to a degrada-
+3
+tion of network that multiple attention maps focus on same
+region while ignoring other regions which may also pro-
+vide discriminative information. To address the problem,
+we speciﬁcally design a Region Independence Loss, which
+aims to ensure each attention map focusing on one speciﬁc
+region without overlapping and the focused region is con-
+sistent across different samples. Further, we employ the At-
+tention Guided Data Augementation(AGDA) mechanism to
+decrease the salience of the most discriminative feature and
+force other attention maps to mine more useful information.
+3.2. Multi-attentional Framework
+Denote the input face image of network as I and the
+backbone network of our framework as f, the feature maps
+extracted from the intermediate stage of t-th layer is de-
+noted as ft(I) with size of Ct × Ht × Wt. Here, Ct is the
+number of channels, Ht, Wt are the height and the width of
+feature maps, respectively.
+Multiple Attention Maps Generation.
+As described
+above, given a real/fake face image I as input, our frame-
+work ﬁrst uses an attention block to generate multiple atten-
+tion maps for I. As shown in Figure 3, the attention block
+is a light weighted model which consists of a 1× 1 con-
+volutional layer, a batch normalization layer and non-linear
+activation layer ReLU. The feature map extracted from a
+speciﬁc layer SLa will be fed into this attention block to
+obtain M attention maps A with size of Ht × Wt, among
+which Ak ∈R{Ht×Wt} represents the k-th attention map
+and corresponds to one speciﬁc discriminative region, for
+example, eyes, mouth or even blending boundary deﬁned in
+[22]. The determination of SLa will be discussed in Sec-
+tion 4.
+Textural Feature Enhancement. Most binary classiﬁca-
+tion frameworks of deepfake detection do not pay attention
+to an important phenomenon, that is, the artifacts caused
+by forgery methods are usually salient in the textural infor-
+mation of shallow feature maps. The textural information
+here represents the high frequency component of the shal-
+low features. Thus to preserve more textural information
+for capturing those artifacts, we design a textural feature
+enhancement block as shown in Figure 3. We ﬁrst apply the
+local average pooling in patches to down-sample the fea-
+ture maps from a speciﬁc layer SLt and obtain the pooled
+feature map D. How to choose SLt will be discussed in
+the following experiments part. Then similar to the texture
+representation of spatial image, we deﬁne the residual at the
+feature level to represent the texture information as below:
+TSLt = fSLt(I) −D
+(1)
+Here T contains most textural information of fSLt(I).
+We then use a densely connected convolution block with
+3 layers to enhance T, the output is noted as F
+∈
+RCF ×Hs×Ws, which is deﬁned as “textual feature map”.
+Bilinear Attention Pooling. After getting the attention map
+A and textural feature map F, we use Bilinear Attention
+Pooling (BAP) to obtain feature maps. We bidirectionally
+use BAP for both shallow feature maps and deep feature
+maps. As shown in Figure 3, to extract shallow textural fea-
+ture, we ﬁrst use bilinear interpolation to resize the attention
+maps into the same scale with feature maps if they are not
+match. Then, we respectively element-wise multiply tex-
+tural feature map F by each attention map Ak and obtain
+partial textural feature maps Fk.
+To the end of this step, the partial textural feature maps
+Fk should be fed into classiﬁer after global pooling. How-
+ever, considering the differences among the different region
+range, if using the traditional global average pooling, the
+pooled feature vector will be inﬂuenced by the intensity of
+attention map, which violates the purpose of focusing on
+textural information. To address the problem, we design a
+normalized average pooling:
+vk =
+PHs−1
+m=0
+PWs−1
+n=0
+Fk,m,n
+|| PHs−1
+m=0
+PWs−1
+n=0
+Fk,m,n||2
+(2)
+The normalized attention features vk ∈R1×N are then
+stacked together to obtain the textural feature matrix P ∈
+RM×CF , which will be fed into the classiﬁer.
+As to deep features, we ﬁrst splice each attention map to
+get a single channel attention map Asum. Then we use BAP
+for Asum and the feature map from the last layer of network
+to get the global deep feature G, which will also be fed into
+the classiﬁer.
+3.3. Regional Independence Loss for Attention
+Maps Regularization
+As aforementioned, training a multiple attention network
+may easily fall into a network degraded case due to the lack
+of ﬁne-grained level labels. In details, different attention
+maps tend to focus on the same region as shown in Figure 4
+which is not conducive to the network to capture rich in-
+formation for a given input. In addition, for different input
+images, we hope that the each attention map locates in ﬁxed
+semantic region, for example, attention map A1 focuses on
+eyes in different image, A2 focuses on mouth. Therefore,
+the randomness of captured information by each attention
+map will be reduced.
+To achieve these goals, we propose a Region Indepen-
+dence Loss which helps to reduce the overlap among atten-
+tion maps and keep the consistency for different inputs. We
+apply BAP on the pooled feature map D otained in Sec-
+tion 3.2 to get a “semantic feature vector” : V ∈RM×N,
+and the Regional Independence Loss is deﬁned as below by
+modifying the center loss in [15]:
+4
+LRIL =
+B
+X
+i=1
+M
+X
+j=1
+max(
+V i
+j −ct
+j
+2
+2 −min(yi), 0)+
+X
+i,j∈(M,M),i̸=j
+max
+
+mout −
+ct
+i −ct
+j
+2
+2 , 0
+
+(3)
+where B is the batch size, M is number of attentions, min
+represents the margin between feature and the correspond-
+ing feature center and is set as different values when yi is
+0 and 1. mout is the margin between each feature center.
+c ∈RM×N are feature centers of V , it is deﬁned as below
+and updated in each iteration:
+ct = ct−1 −α
+ 
+ct−1 −1
+B
+B
+X
+i=1
+V i
+!
+(4)
+Here α is the updating rate of feature centers, we decay
+α after each training epoch. The ﬁrst part of LRIL is an
+intra-class loss that pulls V close to feature center c, the
+second part is an inter-class loss that repels feature centers
+scattered. we optimize c by calculating the gradient for V
+in each batch. Considering that the patterns of texture in
+fake faces should be more diverse than real ones for fakes
+are generated by multiple methods, thus we restrict part fea-
+tures of fake faces in the neighborhood from the feature cen-
+ter of real ones but with larger margin. In this way, we give
+a larger margin in the intra-class for searching useful infor-
+mation in fake faces.
+For the objective function of our framework, we combine
+this Regional Independence Loss with the traditional cross
+entropy loss:
+L = λ1 ∗LCE + λ2 ∗LRIL
+(5)
+LCE is a cross entropy loss, λ1 and λ2 are the balancing
+weights for these two terms. By default, we set λ1 = λ2 =
+1 in our experiments.
+3.4. Attention Guided Data Augmentations
+Under the restraining of Regional Independence Loss,
+we reduce the overlap of different attention regions. How-
+ever, although different attention regions can be well sepa-
+rated, the attention maps may still respond to the same dis-
+criminative features. For example, in Figure 5, the attention
+regions are not overlapped but they all strongly respond to
+the landmarks of input faces. To force the different atten-
+tion maps to focus on different information, we propose the
+Attention Guided Data Augmentation (AGDA) mechanism.
+For each training sample, one of the attention maps Ak is
+randomly selected to guide the data augmentation process,
+and it is normalized as Augmentation Map A∗
+k ∈RH×W .
+Then we use Gaussian blur to generate a degraded image.
+Candidate of SLt
+Candidate of SLa
+ACC(%)
+L2
+L4
+96.38
+L2
+L5
+97.26
+L3
+L4
+96.14
+L3
+L5
+96.81
+Table 1: Performance of our methods based on different
+combination of SLt and SLa.
+Finally, we use A∗
+k as the weight of original image and de-
+graded image:
+I′ = I × (1 −A∗
+k) + Id × A∗
+k
+(6)
+Attention guided data augmentation helps to train the
+models in two aspects. Firstly, it can add blurry to some
+regions which ensure the model to learn more robust fea-
+tures from other regions. Alternatively, AGDA can erase
+the most saliently discriminative region by chance, which
+forces different attention maps focusing their response on
+different targets. Moreover, the AGDA mechanism can pre-
+vent a single attention region from expanding too much and
+encourage the attention blocks to explore various attention
+region dividing forms.
+4. Experiments
+In this section, we ﬁrst explore the optimal settings for
+our proposed multi-attentional framework and then present
+extensive experimental results to demonstrate the effective-
+ness of our method.
+4.1. Implement Details
+For all real/fake video frames, we use a state-of-the-art
+face extractor RetinaFace[8] to detect faces and save the
+aligned facial images as inputs with a size of 380 × 380.
+We set hyper-parameters α = 0.05 in Equation 4, and de-
+cayed by 0.9 after each epoch. The inter-class margin mout
+in Equation 3 is set to 0.2. The intra-class margin min are
+set as 0.05 and 0.1 respectively for real and fake images.
+We choose quantity of attention maps M, SLa and SLt
+by experiments. In AGDA we set the resize factor 0.3 and
+Gaussian blur σ = 7. Our models are trained with Adam
+optimizer[20] with learning rate 0.001 and weight decay 1e-
+6. We train our models on 4 RTX 2080Ti GPUs with batch
+size 48.
+4.2. Determination of SLa and SLt
+In this paper, we adopt EfﬁcientNet-b4[39] as the
+backbone network of our multi-attentional framework.
+EfﬁcientNet-b4 is able to achieve comparable performance
+to XceptionNet [3] with only half FLOPs. There are 7 main
+5
+Methods
+LQ
+HQ
+ACC
+AUC
+ACC
+AUC
+Steg.Features[11]
+55.98
+-
+70.97
+LD-CNN[5]
+58.69
+-
+78.45
+-
+MesoNet[1]
+70.47
+-
+83.10
+-
+Face X-ray[22]
+-
+61.60
+-
+87.40
+Xception[3]
+86.86
+89.30
+95.73
+96.30
+Xception-ELA[14]
+79.63
+82.90
+93.86
+94.80
+Xception-PAFilters[2]
+87.16
+90.20
+-
+-
+F3-Net[33]
+90.43
+93.30
+97.52
+98.10
+Two Branch[26]
+-
+86.59
+-
+98.70
+EfﬁcientNet-B4[39]
+86.67
+88.20
+96.63
+99.18
+Ours(Xception)
+86.95
+87.26
+96.37
+98.97
+Ours(Efﬁcient-B4)
+88.69
+90.40
+97.60
+99.29
+Table 2:
+Quantitative comparison on FaceForensics++
+dataset with High-Quality and Low-Quality settings, re-
+spectively. The best performances are marked as bold.
+layers in total of EfﬁcientNet, which are denoted from L1-
+L7, respectively.
+As mentioned above, we observe that subtle artifacts
+tend to be preserved by textural features from shallow layers
+of the network, thus we choose L2 and L3 as the candidates
+of SLt. Conversely, we want the attention maps to attend to
+different regions of the input, which needs the guidance of
+high-level semantic information to some extent. Therefore,
+we use deeper stage L4 and L5 as the candidates of SLa.
+By default setting M = 1, we train models with four com-
+binations on FF++(HQ). From the results in Table 1, we ﬁnd
+that the model reaches best performance when using L2 for
+SLt and L5 for SLa.
+4.3. Comparison with Previous Methods
+In this section, we compare our framework with current
+state-of-the-art deepfake detection methods. We evaluate
+the performance on FF++ [34] and DFDC [9], respectively.
+And we further evaluate the cross-dataset performance on
+Celeb-DF [25] in Section 4. We adopt ACC (accuracy) and
+AUC (area under Receiver Operating Characteristic Curve)
+as the evaluation metrics for extensive experiments.
+4.3.1
+Evaluation on FaceForensics++
+FaceForensics++[34] is the most widely used dataset in
+many deepfake detection approaches, it contains 1000
+original real videos from internet and each real video
+corresponds to 4 forgery ones, which are manipulated
+by Deepfakes,
+NeuralTextures[40],
+FaceSwap[48] and
+Face2Face[41], respectively.
+In the training process, we
+augment the original frames 4 times for real/fake label bal-
+ance. We adopt EfﬁcientNet-B4 as the backbone of our
+Method
+Logloss
+Selim Seferbekov[35]
+0.1983
+WM[51]
+0.1787
+NTechLab[7]
+0.1703
+Eighteen Years Old[36]
+0.1882
+The Medics[16]
+0.2157
+Ours
+0.1679
+Table 3: Comparison with DFDC winning teams’ methods
+on the DFDC testing dataset. We participated in the compe-
+tition as team WM.
+framework, and test the performances on HQ (c23) version
+and LQ (c40) version, respectively. Specially, when train-
+ing our model on LQ, the parameters are initialized by those
+pretrained on HQ to accelerate the convergence. The com-
+parison results are listed in Table 2.
+The results in Table 2 demonstrate that our method
+achieves state-of-the-art performance on the HQ version of
+FF++. And the performances of different backbone veri-
+ﬁes that our framework is not restricted by the backbone
+networks. However, the performance decreases 1.5% com-
+pared with F3-Net [33] on the LQ version since F3-Net is
+a speciﬁcally designed method for high-compressed deep-
+fake videos detection. This is mainly because the videos
+in FF++(LQ) are highly compressed and cause a signiﬁcant
+loss in textural information, which is a disaster to our tex-
+ture enhancement designing. The results also reveal a limi-
+tation of our framework, that is, our framework is sensitive
+to high compression rate which blurs most of the useful in-
+formation in spatial domain. We will make our framework
+more robust to compression in the future.
+4.3.2
+Evaluating on DFDC Dataset
+DeepFake Detection Challenge (DFDC) is the most re-
+cently released largest scale deepfake detection dataset, this
+dataset is public on the Deepfake Detection Challenge or-
+ganized by Facebook in 2020. Currently, it is the most chal-
+lenging dataset for deepfake detection task due to the excel-
+lent forgery quality of fake videos in this dataset. Seldom
+previous methods have been conducted on this dataset thus
+we train our model on the training set of this dataset and
+only compare the logloss score with the winning teams’
+methods of the DFDC contest. Here the provided logloss
+scores are calculated on the DFDC testing set(Ref. to Table
+2 of [9]), which is one part of DFDC private set. Smaller
+logloss represent a better performance. The results in Ta-
+ble 3 demonstrate that our framework achieves state-of-the-
+art performance on DFDC dataset.
+6
+Method
+FF++
+Celeb-DF
+Two-stream[53]
+70.10
+53.80
+Meso4[1]
+84.70
+54.80
+Mesolnception4[1]
+83.00
+53.60
+FWA[24]
+80.10
+56.90
+Xception-raw[25]
+99.70
+48.20
+Xception-c23[25]
+99.70
+65.30
+Xception-c40[25]
+95.50
+65.50
+Multi-task[29]
+76.30
+54.30
+Capsule[30]
+96.60
+57.50
+DSP-FWA[24]
+93.00
+64.60
+Two Branch[26]
+93.18
+73.41
+F3-Net[33]
+98.10
+65.17
+EfﬁcientNet-B4[39]
+99.70
+64.29
+Ours
+99.80
+67.44
+Table 4: Cross-dataset evaluation on Celeb-DF (AUC(%))
+by training on FF++. Results of some other methods are
+cited directly from [26].
+Our method outperforms most
+deepfake detection approaches.
+M
+FF++(HQ)
+Celeb-DF
+1
+97.26
+67.30
+2
+97.51
+65.74
+3
+97.35
+66.86
+4
+97.60
+67.44
+5
+97.39
+66.82
+Table 5: Ablation results on FF++(HQ) (Acc %) and Celeb-
+DF (AUC %) with different number of attention maps.
+4.3.3
+Cross-dataset Evaluation on Celeb-DF
+In this part, we evaluate the transferability of our frame-
+work, that is trained on FF++(HQ) with multiple forgery
+methods but tested on Celeb-DF [25]. We sample 30 frames
+for each video to calculate the frame-level AUC scores.
+The results are shown in Table 4. Our method shows bet-
+ter transferability than most existing methods. Two-branch
+[26] achieves the state-of-the-art performance in transfer-
+ability, however, its in-dataset AUC is far behind ours.
+4.4. Ablation Study
+4.4.1
+Effectiveness of Multiple Attentions
+To conﬁrm the effectiveness of using multiple attentions,
+we evaluate how the quantity of attention maps affect the
+accuracy and transferability of our model. We train mod-
+els in our framework with different attention quantities M
+on FF++(HQ), the other hyper-parameters are kept same as
+settings in Table 2. For the single attentional model, we do
+not use the regional independence loss and AGDA.
+The Acc results on FF++(HQ) and AUC results on
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+Origin
+Deepfakes
+NeuralTextures
+FaceSwap
+Face2Face
+Figure 4: Attention maps trained without regional indepen-
+dence loss (RIL) and AGDA. Without RIL and AGDA, the
+network is easily degraded and the multiple attention maps
+locates the same regions of input.
+Celeb-DF are reported in table Table 5.
+In some cases,
+multi-attention based models perform better than the sin-
+gle attentional model, and we found that M = 4 provides
+the best performance.
+4.4.2
+Ablation Study on Regional Independence Loss
+and AGDA
+As mentioned above, the regional independence loss and
+AGDA play an important role in regularized multiple atten-
+tion maps training. In this part, we execute quantitative ex-
+periments and give some visualizations to demonstrate that
+these two components are necessary.
+First, to demonstrate the effectiveness of our regional in-
+dependence loss, we compare the performances of the mod-
+els trained with different auxiliary losses. We keep all the
+settings identical with previous except for the loss function.
+With the same motivation in designing auxiliary loss, we
+substitute the regional independence loss with Additive An-
+gular Margin softmax(AMS)[42] that can also force feature
+vectors close to their center.
+Then we verify the effectiveness of our design for
+AGDA. As mentioned, we blur the original image to de-
+grade the selected region of input.
+Thus the strategy of
+AGDA can be regarded as a “soft attention dropping”. In
+this part, we alternatively adopt a “hard attention dropping”,
+which directly erases pixels of selected region by binary at-
+7
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+Origin
+Deepfakes
+NeuralTextures
+FaceSwap
+Face2Face
+Figure 5: Attention maps trained without AGDA. Although
+the regional independence loss forces different attention
+maps to separate, they tend to respond to the same salient
+feature without the help of AGDA.
+Loss type
+AGDA type
+FF++(HQ)
+Celeb-DF
+None
+None
+96.74
+64.86
+AMS
+None
+96.49
+64.23
+RIL
+None
+97.38
+65.85
+AMS
+Hard
+96.53
+63.73
+RIL
+Hard
+97.24
+64.40
+AMS
+Soft
+96.78
+66.42
+RIL
+Soft
+97.60
+67.44
+Table 6: Ablation results of different loss function and
+AGDA strategy.
+The model achieves best performance
+when using regional independence loss and soft AGDA
+mechanism. The metric on FF++(HQ) dataset is ACC, and
+on Celeb-DF is AUC.
+tention mask BM:
+BMk(i, j) =
+(
+0,
+if A∗
+k(i, j) > θd
+1,
+otherwise.
+(7)
+We set the attention dropping threshold θd = 0.5 in this ex-
+periment. The comparison results of this ablation study are
+depicted in Table 6. The results verify that both regional in-
+dependence loss (RIL) and attention guided data augmenta-
+tions (soft attention dropping) have remarkable contribution
+to improve the performance of our framework.
+To further help understanding of the function of regional
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+200
+0
+100
+200
+300
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+0
+10
+20
+0
+5
+10
+15
+20
+Origin
+Deepfakes
+NeuralTextures
+FaceSwap
+Face2Face
+Figure 6: Attention maps trained with both regional inde-
+pendence loss and AGDA. The location and response of at-
+tention maps are correctly distributed.
+independence loss and the AGDA strategy, we visualize the
+attention maps of models trained with/without these two
+components. Figure 4 illustrate the attention maps without
+RIL, it shows a clear trend that all attention maps are fo-
+cused on same region. Figure 5 demonstrate that, although
+the attention regions are separated under the retraining of
+RIL, the different regions still exhibit similar response to the
+most salient features such as landmarks. This is not conduc-
+tive for multiple attention maps to capture divergent infor-
+mation from different regions. While Figure 6 veriﬁes that
+when both RIL and soft AGDA are adopted, the attention
+maps show response in discriminative regions with diverse
+semantic representations.
+5. Conclusion
+In this paper, we research the deepfake detection from
+a novel perspective that is formulating the deepfake detec-
+tion task as a ﬁne-grained classiﬁcation problem. We pro-
+pose a multi-attentional deepfake detection framework. The
+proposed framework explores discriminative local regions
+by multiple attention maps, and enhances texture features
+from shallow layers to capture more subtle artifacts. Then
+the low-level textural feature and high-level semantic fea-
+tures are aggregated guided by the attention maps. A re-
+gional independence loss function and attention guided data
+augmentation mechanism are introduced to help train dis-
+entangled multiple attentions. Our method achieves good
+improvements in extensive metrics.
+8
+References
+[1] Darius Afchar, Vincent Nozick, Junichi Yamagishi, and Isao
+Echizen. Mesonet: a compact facial video forgery detection
+network. In 2018 IEEE International Workshop on Informa-
+tion Forensics and Security, WIFS 2018, Hong Kong, China,
+December 11-13, 2018, pages 1–7. IEEE, 2018.
+[2] M. Chen, V. Sedighi, M. Boroumand, and J. Fridrich. Jpeg-
+phase-aware convolutional neural network for steganalysis
+of jpeg images. Proceedings of the 5th ACM Workshop on
+Information Hiding and Multimedia Security, 2017.
+[3] Franc¸ois Chollet. Xception: Deep learning with depthwise
+separable convolutions. In 2017 IEEE Conference on Com-
+puter Vision and Pattern Recognition, CVPR 2017, Hon-
+olulu, HI, USA, July 21-26, 2017, pages 1800–1807. IEEE
+Computer Society, 2017.
+[4] Umur Aybars Ciftci, Ilke Demir, and Lijun Yin. Fakecatcher:
+Detection of synthetic portrait videos using biological sig-
+nals. IEEE Transactions on Pattern Analysis and Machine
+Intelligence, 2020.
+[5] Davide Cozzolino, Giovanni Poggi, and Luisa Verdoliva.
+Recasting residual-based local descriptors as convolutional
+neural networks: an application to image forgery detec-
+tion. In Matthew C. Stamm, Matthias Kirchner, and Svi-
+atoslav Voloshynovskiy, editors, Proceedings of the 5th ACM
+Workshop on Information Hiding and Multimedia Security,
+IH&MMSec 2017, Philadelphia, PA, USA, June 20-22, 2017,
+pages 159–164. ACM, 2017.
+[6] Hao Dang, Feng Liu, Joel Stehouwer, Xiaoming Liu, and
+Anil K Jain. On the detection of digital face manipulation.
+In Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, pages 5781–5790, 2020.
+[7] Azat Davletshin.
+https://github.com/NTech-
+Lab/deepfake-detection-challenge.
+[8] Jiankang Deng, J. Guo, Y. Zhou, Jinke Yu, I. Kotsia, and S.
+Zafeiriou. Retinaface: Single-stage dense face localisation
+in the wild. ArXiv, abs/1905.00641, 2019.
+[9] Brian Dolhansky, Joanna Bitton, Ben Pﬂaum, Jikuo Lu,
+Russ Howes, Menglin Wang, and Cristian Canton Ferrer.
+The deepfake detection challenge dataset.
+arXiv preprint
+arXiv:2006.07397, 2020.
+[10] Ruoyi Du, Dongliang Chang, Ayan Kumar Bhunia, Jiyang
+Xie, Yi-Zhe Song, Zhanyu Ma, and Jun Guo. Fine-grained
+visual classiﬁcation via progressive multi-granularity train-
+ing of jigsaw patches. In European Conference on Computer
+Vision, 2020.
+[11] Jessica J. Fridrich and Jan Kodovsk´y. Rich models for ste-
+ganalysis of digital images. IEEE Trans. Inf. Forensics Se-
+cur., 7(3):868–882, 2012.
+[12] Jianlong Fu, Heliang Zheng, and Tao Mei. Look closer to
+see better: Recurrent attention convolutional neural network
+for ﬁne-grained image recognition. In 2017 IEEE Confer-
+ence on Computer Vision and Pattern Recognition, CVPR
+2017, Honolulu, HI, USA, July 21-26, 2017, pages 4476–
+4484. IEEE Computer Society, 2017.
+[13] Ross B. Girshick, Jeff Donahue, Trevor Darrell, and Jiten-
+dra Malik. Rich feature hierarchies for accurate object de-
+tection and semantic segmentation. In 2014 IEEE Confer-
+ence on Computer Vision and Pattern Recognition, CVPR
+2014, Columbus, OH, USA, June 23-28, 2014, pages 580–
+587. IEEE Computer Society, 2014.
+[14] T. S. Gunawan, Siti Amalina Mohammad Hanaﬁah, M. Kar-
+tiwi, Nanang Ismail, N. F. Za’bah, and A. N. Nordin. Devel-
+opment of photo forensics algorithm by detecting photoshop
+manipulation using error level analysis.
+Indonesian Jour-
+nal of Electrical Engineering and Computer Science, 7:131–
+137, 2017.
+[15] Harald Hanselmann, Shen Yan, and Hermann Ney.
+Deep
+ﬁsher faces.
+In British Machine Vision Conference 2017,
+BMVC 2017, London, UK, September 4-7, 2017. BMVA
+Press, 2017.
+[16] James Howard and Ian Pan. https://github.com/
+jphdotam/DFDC/.
+[17] Tao Hu and Honggang Qi.
+See better before looking
+closer: Weakly supervised data augmentation network for
+ﬁne-grained visual classiﬁcation.
+CoRR, abs/1901.09891,
+2019.
+[18] Gao Huang, Zhuang Liu, Laurens van der Maaten, and Kil-
+ian Q. Weinberger.
+Densely connected convolutional net-
+works. In 2017 IEEE Conference on Computer Vision and
+Pattern Recognition, CVPR 2017, Honolulu, HI, USA, July
+21-26, 2017, pages 2261–2269. IEEE Computer Society,
+2017.
+[19] Ira Kemelmachershlizerman. Transﬁguring portraits. Inter-
+national Conference on Computer Graphics and Interactive
+Techniques, 35(4):94, 2016.
+[20] Diederik P. Kingma and Jimmy Ba. Adam: A method for
+stochastic optimization. In Yoshua Bengio and Yann LeCun,
+editors, 3rd International Conference on Learning Represen-
+tations, ICLR 2015, San Diego, CA, USA, May 7-9, 2015,
+Conference Track Proceedings, 2015.
+[21] Mohammad Rami Koujan, Michail Christos Doukas, Anas-
+tasios Roussos,
+and Stefanos Zafeiriou.
+Head2head:
+Video-based
+neural
+head
+synthesis.
+arXiv
+preprint
+arXiv:2005.10954, 2020.
+[22] Lingzhi Li, Jianmin Bao, Ting Zhang, Hao Yang, Dong
+Chen, Fang Wen, and Baining Guo. Face x-ray for more gen-
+eral face forgery detection. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+pages 5001–5010, 2020.
+[23] Yuezun Li, Ming-Ching Chang, and Siwei Lyu. In ictu oculi:
+Exposing AI created fake videos by detecting eye blinking.
+In 2018 IEEE International Workshop on Information Foren-
+sics and Security, WIFS 2018, Hong Kong, China, December
+11-13, 2018, pages 1–7. IEEE, 2018.
+[24] Yuezun Li and Siwei Lyu. Exposing deepfake videos by de-
+tecting face warping artifacts. In CVPR Workshops, 2019.
+[25] Yuezun Li, Xin Yang, Pu Sun, Honggang Qi, and Siwei
+Lyu. Celeb-df: A large-scale challenging dataset for deep-
+fake forensics. In Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, pages 3207–
+3216, 2020.
+[26] Iacopo Masi, Aditya Killekar, Royston Marian Mascaren-
+has, Shenoy Pratik Gurudatt, and Wael AbdAlmageed. Two-
+branch recurrent network for isolating deepfakes in videos.
+arXiv preprint arXiv:2008.03412, 2020.
+9
+[27] Falko Matern, Christian Riess, and Marc Stamminger. Ex-
+ploiting visual artifacts to expose deepfakes and face manip-
+ulations.
+In 2019 IEEE Winter Applications of Computer
+Vision Workshops (WACVW), pages 83–92. IEEE, 2019.
+[28] Ryota Natsume, Tatsuya Yatagawa, and Shigeo Morishima.
+Rsgan: face swapping and editing using face and hair repre-
+sentation in latent spaces. In SIGGRAPH ’18, 2018.
+[29] Huy H. Nguyen, Fuming Fang, J. Yamagishi, and I. Echizen.
+Multi-task learning for detecting and segmenting manipu-
+lated facial images and videos. 2019 IEEE 10th International
+Conference on Biometrics Theory, Applications and Systems
+(BTAS), pages 1–8, 2019.
+[30] Huy H. Nguyen, J. Yamagishi, and I. Echizen.
+Capsule-
+forensics: Using capsule networks to detect forged images
+and videos. ICASSP 2019 - 2019 IEEE International Confer-
+ence on Acoustics, Speech and Signal Processing (ICASSP),
+pages 2307–2311, 2019.
+[31] Yuval Nirkin, Yosi Keller, and Tal Hassner. Fsgan: Subject
+agnostic face swapping and reenactment. pages 7184–7193,
+2019.
+[32] Albert Pumarola, Antonio Agudo, Aleix M Martinez, Al-
+berto Sanfeliu, and Francesc Morenonoguer. Ganimation:
+Anatomically-aware facial animation from a single image.
+pages 835–851, 2018.
+[33] Yuyang Qian, Guojun Yin, Lu Sheng, Zixuan Chen, and Jing
+Shao.
+Thinking in frequency: Face forgery detection by
+mining frequency-aware clues. In European Conference on
+Computer Vision, pages 86–103. Springer, 2020.
+[34] Andreas Rossler, Davide Cozzolino, Luisa Verdoliva, Chris-
+tian Riess, Justus Thies, and Matthias Nießner. Faceforen-
+sics++: Learning to detect manipulated facial images.
+In
+Proceedings of the IEEE International Conference on Com-
+puter Vision, pages 1–11, 2019.
+[35] Selim
+Seferbekov.
+https : / / github . com /
+selimsef/dfdc_deepfake_challenge.
+[36] Jing Shao, Huafeng Shi, Zhenfei Yin, Zheng Fang, Guo-
+jun Yin, Siyu Chen, Ning Ning, and Yu Liu.
+https:
+//github.com/Siyu-C/RobustForensics.
+[37] Marcel Simon and Erik Rodner. Neural activation constella-
+tions: Unsupervised part model discovery with convolutional
+networks. In 2015 IEEE International Conference on Com-
+puter Vision, ICCV 2015, Santiago, Chile, December 7-13,
+2015, pages 1143–1151. IEEE Computer Society, 2015.
+[38] Ira
+Kemelmacher-Shlizerman
+Supasorn
+Suwajanakorn,
+Steven Seitz. Synthesizing obama: Learning lip sync from
+audio. SIGGRAPH, 36(4):95, 2017.
+[39] Mingxing Tan and Quoc V. Le.
+Efﬁcientnet: Rethinking
+model scaling for convolutional neural networks.
+In Ka-
+malika Chaudhuri and Ruslan Salakhutdinov, editors, Pro-
+ceedings of the 36th International Conference on Machine
+Learning, ICML 2019, 9-15 June 2019, Long Beach, Cali-
+fornia, USA, volume 97 of Proceedings of Machine Learning
+Research, pages 6105–6114. PMLR, 2019.
+[40] Justus Thies, Michael Zollh¨ofer, and Matthias Nießner. De-
+ferred neural rendering: image synthesis using neural tex-
+tures. ACM Trans. Graph., 38(4):66:1–66:12, 2019.
+[41] Justus Thies, Michael Zollhofer, Marc Stamminger, Chris-
+tian Theobalt, and Matthias Niebner. Face2face: Real-time
+face capture and reenactment of rgb videos. pages 2387–
+2395, 2016.
+[42] Feng Wang, Jian Cheng, Weiyang Liu, and H. Liu. Additive
+margin softmax for face veriﬁcation. IEEE Signal Process-
+ing Letters, 25:926–930, 2018.
+[43] Sheng-Yu Wang, Oliver Wang, Andrew Owens, Richard
+Zhang, and Alexei A Efros. Detecting photoshopped faces
+by scripting photoshop. In ICCV, 2019.
+[44] Wayne Wu, Yunxuan Zhang, Cheng Li, Chen Qian, and
+Chen Change Loy. Reenactgan: Learning to reenact faces
+via boundary transfer. pages 622–638, 2018.
+[45] Xi Wu, Zhen Xie, YuTao Gao, and Yu Xiao. Sstnet: De-
+tecting manipulated faces through spatial, steganalysis and
+temporal features.
+In ICASSP 2020-2020 IEEE Interna-
+tional Conference on Acoustics, Speech and Signal Process-
+ing (ICASSP), pages 2952–2956. IEEE, 2020.
+[46] Xin Yang, Yuezun Li, and Siwei Lyu. Exposing deep fakes
+using inconsistent head poses. In IEEE International Confer-
+ence on Acoustics, Speech and Signal Processing, ICASSP
+2019, Brighton, United Kingdom, May 12-17, 2019, pages
+8261–8265. IEEE, 2019.
+[47] Ze Yang, Tiange Luo, Dong Wang, Zhiqiang Hu, Jun Gao,
+and Liwei Wang. Learning to navigate for ﬁne-grained clas-
+siﬁcation. In ECCV, 2018.
+[48] Jiangning Zhang, Xianfang Zeng, Yusu Pan, Yong Liu, Yu
+Ding, and Changjie Fan. Faceswapnet: Landmark guided
+many-to-many face reenactment.
+CoRR, abs/1905.11805,
+2019.
+[49] Ning Zhang, Jeff Donahue, Ross B. Girshick, and Trevor
+Darrell. Part-based r-cnns for ﬁne-grained category detec-
+tion. In David J. Fleet, Tom´as Pajdla, Bernt Schiele, and
+Tinne Tuytelaars, editors, Computer Vision - ECCV 2014
+- 13th European Conference, Zurich, Switzerland, Septem-
+ber 6-12, 2014, Proceedings, Part I, volume 8689 of Lecture
+Notes in Computer Science, pages 834–849. Springer, 2014.
+[50] Ning Zhang, Ryan Farrell, Forrest N. Iandola, and Trevor
+Darrell. Deformable part descriptors for ﬁne-grained recog-
+nition and attribute prediction. In IEEE International Con-
+ference on Computer Vision, ICCV 2013, Sydney, Australia,
+December 1-8, 2013, pages 729–736. IEEE Computer Soci-
+ety, 2013.
+[51] Hanqing Zhao, Hao Cui, and Wenbo Zhou.
+https://
+github.com/cuihaoleo/kaggle-dfdc.
+[52] Heliang Zheng, Jianlong Fu, Tao Mei, and Jiebo Luo. Learn-
+ing multi-attention convolutional neural network for ﬁne-
+grained image recognition. In IEEE International Confer-
+ence on Computer Vision, ICCV 2017, Venice, Italy, Octo-
+ber 22-29, 2017, pages 5219–5227. IEEE Computer Society,
+2017.
+[53] Peng Zhou, Xintong Han, V. Morariu, and L. Davis. Two-
+stream neural networks for tampered face detection. 2017
+IEEE Conference on Computer Vision and Pattern Recogni-
+tion Workshops (CVPRW), pages 1831–1839, 2017.
+10

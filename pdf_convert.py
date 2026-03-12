@@ -1,8 +1,8 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
+from reportlab.lib.colors import HexColor
 from textwrap import wrap
-import re
 
 def text_to_pdf(text, output_path):
     c = canvas.Canvas(output_path, pagesize=A4)
@@ -16,62 +16,102 @@ def text_to_pdf(text, output_path):
     body_font = "Times-Roman"
     bold_font = "Times-Bold"
 
+    # Font sizes
+    title_size = 18
+    heading_size = 14
     body_size = 12
-    line_height = 24  # double-spaced
+    
+    # Line heights
+    title_line_height = 28
+    heading_line_height = 26
+    body_line_height = 20
+    
     max_chars = 85
+
+    # Colors
+    title_color = HexColor("#0f172a")
+    heading_color = HexColor("#1e293b")
+    body_color = HexColor("#334155")
+    line_color = HexColor("#e5e7eb")
 
     def new_page():
         nonlocal y
         c.showPage()
         y = height - top
         c.setFont(body_font, body_size)
+        c.setFillColor(body_color)
+
+    def draw_horizontal_line():
+        nonlocal y
+        c.setStrokeColor(line_color)
+        c.setLineWidth(1)
+        c.line(left, y + 5, width - right, y + 5)
 
     c.setFont(body_font, body_size)
+    c.setFillColor(body_color)
 
     is_title = True
     in_references = False
+    section_headings = ["Abstract", "Methods", "Results", "References"]
 
-    for line in text.split("\n"):
-
-        # Blank line
-        if not line.strip():
-            y -= line_height
-            continue
-
+    lines = text.split("\n")
+    
+    for i, line in enumerate(lines):
         stripped = line.strip()
 
-        # ---------- TITLE ----------
-        if is_title and stripped.startswith("**") and stripped.endswith("**"):
-            title = stripped[2:-2]
+        # Skip empty lines but add spacing
+        if not stripped:
+            y -= body_line_height / 2
+            continue
 
-            c.setFont(bold_font, body_size)
-            title_lines = wrap(title, max_chars)
-
+        # ---------- TITLE (First non-empty, non-heading line) ----------
+        if is_title and stripped not in section_headings:
+            # Draw title centered and bold
+            c.setFont(bold_font, title_size)
+            c.setFillColor(title_color)
+            
+            title_lines = wrap(stripped, 60)  # Shorter wrap for title
+            
             for t in title_lines:
-                text_width = c.stringWidth(t, bold_font, body_size)
+                if y < bottom:
+                    new_page()
+                    c.setFont(bold_font, title_size)
+                    c.setFillColor(title_color)
+                
+                text_width = c.stringWidth(t, bold_font, title_size)
                 c.drawString((width - text_width) / 2, y, t)
-                y -= line_height
+                y -= title_line_height
 
+            y -= 20  # Extra space after title
             is_title = False
             c.setFont(body_font, body_size)
+            c.setFillColor(body_color)
             continue
 
         # ---------- SECTION HEADINGS ----------
-        if stripped in ["**Abstract**", "**Methods**", "**Results**", "**References**"]:
-            heading = stripped[2:-2]
-            y -= line_height
+        if stripped in section_headings:
+            y -= 15  # Space before heading
 
-            if y < bottom:
+            if y < bottom + 50:  # Ensure heading doesn't start at page bottom
                 new_page()
 
-            c.setFont(bold_font, body_size)
-            c.drawString(left, y, heading)
-            y -= line_height
+            # Draw heading
+            c.setFont(bold_font, heading_size)
+            c.setFillColor(heading_color)
+            c.drawString(left, y, stripped)
+            y -= 8
+            
+            # Draw underline
+            draw_horizontal_line()
+            y -= heading_line_height
+
             c.setFont(body_font, body_size)
+            c.setFillColor(body_color)
 
-            if heading == "References":
+            if stripped == "References":
                 in_references = True
-
+            
+            is_title = False
             continue
 
         # ---------- REFERENCES (HANGING INDENT) ----------
@@ -89,17 +129,18 @@ def text_to_pdf(text, output_path):
                 else:
                     c.drawString(left + 36, y, w)  # hanging indent
 
-                y -= line_height
+                y -= body_line_height
 
+            y -= 5  # Extra space between references
             continue
 
         # ---------- NORMAL PARAGRAPH ----------
-        wrapped = wrap(line, max_chars)
+        wrapped = wrap(stripped, max_chars)
         for w in wrapped:
             if y < bottom:
                 new_page()
 
             c.drawString(left, y, w)
-            y -= line_height
+            y -= body_line_height
 
     c.save()

@@ -1,11 +1,6 @@
 import os
 import re
 
-TEXT_DIR = "data/texts"
-OUTPUT_DIR = "data/dist_texts"
-
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 KEY_PHRASES = [
     "we propose",
     "we introduce",
@@ -29,7 +24,11 @@ KEY_PHRASES = [
     "results demonstrate"
 ]
 
-def extract_key_findings():
+def extract_key_findings(session_id):
+    TEXT_DIR = f"user_sessions/{session_id}/texts"
+    OUTPUT_DIR = f"user_sessions/{session_id}/dist_texts"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
     for filename in os.listdir(TEXT_DIR):
         if not filename.endswith(".txt"):
             continue
@@ -43,7 +42,6 @@ def extract_key_findings():
         with open(input_path, "r", encoding="utf-8") as f:
             text = f.read().lower()   
 
-        
         sentences = re.split(r'(?<=[.!?])\s+', text)
 
         key_sentences = []
@@ -56,4 +54,3 @@ def extract_key_findings():
                 f.write(s + "\n")
 
         print(f"Extracted {len(key_sentences)} key findings from {filename}")
-

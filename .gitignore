@@ -7,3 +7,6 @@ __pycache__/
 
 # Virtual environments (if any)
 env/
+
+user_sessions/
+.DS_Store

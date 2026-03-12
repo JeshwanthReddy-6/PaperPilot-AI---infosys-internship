@@ -1,10 +1,10 @@
 import os
 import requests
 
-PDF_DIR = "data/pdfs"
-os.makedirs(PDF_DIR, exist_ok=True)
-
-def download_pdf(pdf_url, paper_id):
+def download_pdf(pdf_url, paper_id, session_id):
+    PDF_DIR = f"user_sessions/{session_id}/pdfs"
+    os.makedirs(PDF_DIR, exist_ok=True)
+    
     try:
         response = requests.get(pdf_url, timeout=15)
         response.raise_for_status()

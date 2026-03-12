@@ -1,0 +1,177 @@
+moreover, to address
+the learning difﬁculty of this network, we further introduce
+a new regional independence loss and an attention guided
+data augmentation strategy.
+through extensive experiments
+on different datasets, we demonstrate the superiority of our
+method over the vanilla binary classiﬁer counterparts, and
+achieve state-of-the-art performance.
+0
+0
+100
+100 -
+200
+200 -
+300
+300 -
+200
+0
+200
+0
+0
+100
+200
+300
+0
+200
+0
+200
+figure 1: example of the multiple attentional regions ob-
+tained by our method.
+based on this observation, we propose to model deep-
+fake detection as a special ﬁne-grained classiﬁcation prob-
+1
+arxiv:2103.02406v3  [cs.cv]  8 mar 2021
+lem with two categories.
+inspired by the success of parts based model in the
+ﬁne-grained classiﬁcation ﬁeld, this paper presents a novel
+multi-attention network for deepfake detection.
+first, in
+order to make the network attend to different potential ar-
+tifacts regions, we design multi-attention heads to predict
+multiple spatial attention maps by using the deep semantic
+features.
+figure 1 gives an example
+of the discriminative features obtained by our method.
+to address this problem, we further pro-
+pose a new attention guided data augmentation mechanism.
+simultaneously, we introduce a new regional independence
+loss to encourage different attention heads to attend to dif-
+ferent local parts.
+it shows that our method is superior
+to the vanilla binary classiﬁer baselines and achieves state-
+of-the-art performance.
+in summary, the contributions of
+this paper are threefold as below:
+• we reformulate the deepfake detection as a ﬁne-
+grained classiﬁcation task, which brings a novel per-
+spective for this ﬁeld.
+• we propose a new multi-attentional network architec-
+ture to capture local discriminative features from mul-
+tiple face attentive regions.
+• extensive experiments demonstrate that our method
+outperforms the vanilla binary classiﬁcation baselines
+and achieves state-of-the-art detection performance.
+recently, the rapid progress in deep
+generative models makes the face forgery technique “deep”
+and can generate realistic results, which presents a new
+problem of deepfake detection and brings signiﬁcant chal-
+lenges.
+[33] uses frequency-aware decomposition and local
+frequency statistic to expose deepfake artifacts in frequency
+domain and achieves state-of-the-art performance.
+previous works [50, 49] build part
+2
+bilinear
+attention
+pooling
+input image 𝐼
+backbone
+layers 1
+shallow layer
+𝑓𝑆𝐿𝑡(𝐼)
+backbone
+layers 2
+backbone
+layers 3
+global feature
+𝑮
+textural feature maps 
+𝑇𝑆𝐿𝑡
+attention 
+module
+attention maps 
+𝐴
+textural 
+feature matrix
+𝑷
+classifier
+real or 
+fake
+attention layer
+𝑓𝑆𝐿𝑎(𝐼)
+dense 
+block
+texture enhancement block
+average 
+pooling
+non-textural 
+feature map 𝐷
+expand residual
+figure 2: the framework of our method.
+motivated by these observation, we propose a multi-
+attentional framework to solve the deepfake detection as a
+ﬁne-grained classiﬁcation problem.
+the frame-
+work of our method is depicted in figure 2.
+thus to preserve more textural information
+for capturing those artifacts, we design a textural feature
+enhancement block as shown in figure 3.
+to address the problem, we design a
+normalized average pooling:
+vk =
+phs−1
+m=0
+pws−1
+n=0
+fk,m,n
+|| phs−1
+m=0
+pws−1
+n=0
+fk,m,n||2
+(2)
+the normalized attention features vk ∈r1×n are then
+stacked together to obtain the textural feature matrix p ∈
+rm×cf , which will be fed into the classiﬁer.
+to achieve these goals, we propose a region indepen-
+dence loss which helps to reduce the overlap among atten-
+tion maps and keep the consistency for different inputs.
+to force the different atten-
+tion maps to focus on different information, we propose the
+attention guided data augmentation (agda) mechanism.
+candidate of slt
+candidate of sla
+acc(%)
+l2
+l4
+96.38
+l2
+l5
+97.26
+l3
+l4
+96.14
+l3
+l5
+96.81
+table 1: performance of our methods based on different
+combination of slt and sla.
+experiments
+in this section, we ﬁrst explore the optimal settings for
+our proposed multi-attentional framework and then present
+extensive experimental results to demonstrate the effective-
+ness of our method.
+the results in table 2 demonstrate that our method
+achieves state-of-the-art performance on the hq version of
+ff++.
+our method outperforms most
+deepfake detection approaches.
+our method shows bet-
+ter transferability than most existing methods.
+conclusion
+in this paper, we research the deepfake detection from
+a novel perspective that is formulating the deepfake detec-
+tion task as a ﬁne-grained classiﬁcation problem.
+our method achieves good
+improvements in extensive metrics.

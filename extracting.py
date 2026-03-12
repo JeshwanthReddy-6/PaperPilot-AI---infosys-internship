@@ -1,10 +1,10 @@
 import os
 import fitz  # PyMuPDF
 
-TEXT_DIR = "data/texts"
-os.makedirs(TEXT_DIR, exist_ok=True)
-
-def extract_text_from_pdf(pdf_path, paper_id):
+def extract_text_from_pdf(pdf_path, paper_id, session_id):
+    TEXT_DIR = f"user_sessions/{session_id}/texts"
+    os.makedirs(TEXT_DIR, exist_ok=True)
+    
     doc = fitz.open(pdf_path)
     text = ""
 
