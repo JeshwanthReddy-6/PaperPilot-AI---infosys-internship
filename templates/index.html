@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaperPilot AI | Smart Research Assistant</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        :root {
+            color-scheme: dark only;
+        }
+    </style>
+</head>
+<body>
+    <!-- Emoji Star Background -->
+    <div class="emoji-stars">
+        <span class="emoji-star s1">✦</span>
+        <span class="emoji-star s2">✧</span>
+        <span class="emoji-star s3">✨</span>
+        <span class="emoji-star s4">✦</span>
+        <span class="emoji-star s5">✧</span>
+        <span class="emoji-star s6">✨</span>
+        <span class="emoji-star s7">✦</span>
+        <span class="emoji-star s8">✧</span>
+        <span class="emoji-star s9">✨</span>
+        <span class="emoji-star s10">✦</span>
+        <span class="emoji-star s11">✧</span>
+        <span class="emoji-star s12">✨</span>
+        <span class="emoji-star s13">✦</span>
+        <span class="emoji-star s14">✧</span>
+        <span class="emoji-star s15">✨</span>
+        <span class="emoji-star s16">✦</span>
+        <span class="emoji-star s17">✧</span>
+        <span class="emoji-star s18">✨</span>
+    </div>
+
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <h1 class="app-title"><span class="gradient-text">🤖 PaperPilot AI</span></h1>
+            </div>
+            <p class="app-subtitle">Your Intelligent Research Paper Assistant</p>
+            <div class="app-tags">
+                <span class="tag">🔍 Discover</span>
+                <span class="tag">📄 Synthesize</span>
+                <span class="tag">📊 Compare</span>
+            </div>
+        </header>
+
+        <!-- SECTION 1: Fetch Papers -->
+        <section class="glass-card">
+            <div class="card-header">
+                <div class="step-badge" style="background: linear-gradient(135deg, #10b981, #34d399);">1</div>
+                <div>
+                    <h2 class="card-title">Fetch Research Papers</h2>
+                    <p class="card-desc">Search and download academic papers from Semantic Scholar</p>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="topicInput">🔎 Research Topic</label>
+                    <input 
+                        type="text" 
+                        id="topicInput" 
+                        class="input-field"
+                        placeholder="e.g., Deepfake Detection, Machine Learning, Climate Change..."
+                    >
+                </div>
+                <div class="form-group" style="max-width: 200px;">
+                    <label for="paperCount">📚 Number of Papers</label>
+                    <input 
+                        type="number" 
+                        id="paperCount" 
+                        class="input-field"
+                        value="4"
+                        min="1"
+                        max="20"
+                    >
+                </div>
+            </div>
+
+            <div class="info-banner">
+                <span class="info-icon">💡</span>
+                <div>
+                    <strong>Tips:</strong><br>
+                    • Not all papers have open-access PDFs. <span class="highlight">Increase the number</span> to get more downloadable results!<br>
+                    • <span class="highlight">Open in New Tab</span> to view the paper, or <span class="highlight">Download</span> if it doesn’t work.
+                </div>
+
+            </div>
+
+            <button id="fetchBtn" class="btn btn-primary">
+                <span class="btn-icon">🔍</span>
+                Fetch Papers
+            </button>
+
+            <div id="fetchStatus" class="status-message" style="display: none;"></div>
+        </section>
+
+        <!-- SECTION 2: View & Download PDFs -->
+        <section class="glass-card" id="section2" style="display: none;">
+            <div class="card-header">
+                <div class="step-badge" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">2</div>
+                <div>
+                    <h2 class="card-title">View & Download PDFs</h2>
+                    <p class="card-desc">Open papers in new tab or download them to your device</p>
+                </div>
+            </div>
+
+            <div id="papersGrid" class="papers-grid"></div>
+        </section>
+
+        <!-- SECTION 3: Synthesize Papers -->
+        <section class="glass-card" id="section3" style="display: none;">
+            <div class="card-header">
+                <div class="step-badge" style="background: linear-gradient(135deg, #f59e0b, #fbbf24);">3</div>
+                <div>
+                    <h2 class="card-title">Generate Synthesized Paper</h2>
+                    <p class="card-desc">AI-powered synthesis of selected research papers</p>
+                </div>
+            </div>
+
+            <div class="info-banner">
+                <span class="info-icon">✅</span>
+                <div>Select the papers you want to include in the synthesis</div>
+            </div>
+
+            <div id="paperSelector" class="paper-selection-area"></div>
+
+            <div class="button-group">
+                <button id="selectAllBtn" class="btn btn-secondary">✅ Select All</button>
+                <button id="deselectAllBtn" class="btn btn-secondary">❌ Clear All</button>
+            </div>
+
+            <button id="synthesizeBtn" class="btn btn-primary" style="margin-top: 20px;">
+                <span class="btn-icon">🤖</span>
+                Generate Synthesis
+            </button>
+
+            <div id="synthesisResult" style="display: none; margin-top: 30px;">
+                <div class="result-header">
+                    <h3 class="section-subtitle">✨ Synthesized Paper</h3>
+                    <button id="downloadSynthesisBtn" class="btn btn-download">
+                        <span class="btn-icon">📥</span>
+                        Download PDF
+                    </button>
+                </div>
+                <div id="synthesisContent" class="synthesis-display"></div>
+
+                <div class="refinement-box">
+                    <h3 class="section-subtitle">✏️ Refine Paper (Optional)</h3>
+                    <div class="form-group">
+                        <label for="refinementInput">Customization Instructions</label>
+                        <textarea 
+                            id="refinementInput" 
+                            class="textarea-field"
+                            rows="3"
+                            placeholder="e.g., Make the abstract more detailed, add more technical depth, focus on methodology..."
+                        ></textarea>
+                    </div>
+                    <button id="refineBtn" class="btn btn-accent">
+                        <span class="btn-icon">✨</span>
+                        Refine Paper
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: Compare Papers -->
+        <section class="glass-card" id="section4" style="display: none;">
+            <div class="card-header">
+                <div class="step-badge" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">4</div>
+                <div>
+                    <h2 class="card-title">Compare Papers</h2>
+                    <p class="card-desc">Analyze similarity between papers using TF-IDF</p>
+                </div>
+            </div>
+
+            <div class="comparison-legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: linear-gradient(135deg, #10b981, #22c55e);"></div>
+                    <span>Score close to 1.0 → Very Similar</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: linear-gradient(135deg, #ef4444, #dc2626);"></div>
+                    <span>Score close to 0.0 → Very Different</span>
+                </div>
+            </div>
+
+            <button id="compareBtn" class="btn btn-accent">
+                <span class="btn-icon">📊</span>
+                Analyze Similarity
+            </button>
+
+            <div id="comparisonResult" style="display: none; margin-top: 20px;">
+                <h3 class="section-subtitle">📈 Similarity Analysis</h3>
+                <pre id="comparisonContent" class="comparison-result"></pre>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-logo">
+                <span class="gradient-text footer-title">🤖 PaperPilot AI</span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Processing...</p>
+    </div>
+
+    <!-- Hidden session ID -->
+    <input type="hidden" id="sessionId" value="{{ session_id }}">
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
